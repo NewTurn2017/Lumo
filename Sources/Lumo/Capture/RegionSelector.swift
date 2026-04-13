@@ -6,15 +6,19 @@ struct SelectedRegion {
 }
 
 enum RegionSelector {
+    @MainActor fileprivate static weak var current: OverlayController?
+
     @MainActor
     static func presentAndSelect() async throws -> SelectedRegion {
-        try await withCheckedThrowingContinuation { continuation in
+        current?.dismiss(with: CancellationError())
+        return try await withCheckedThrowingContinuation { continuation in
             let controller = OverlayController { result in
                 switch result {
                 case .success(let r): continuation.resume(returning: r)
                 case .failure(let e): continuation.resume(throwing: e)
                 }
             }
+            current = controller
             controller.show()
         }
     }
@@ -31,8 +35,16 @@ private final class OverlayController: NSObject {
     private let completion: Completion
     /// Retains self until cleanup() — prevents deallocation before continuation resumes.
     private var keepAlive: OverlayController?
+    private var hasCompleted = false
 
     init(completion: @escaping Completion) { self.completion = completion }
+
+    func dismiss(with error: Error) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+        cleanup()
+        completion(.failure(error))
+    }
 
     func show() {
         keepAlive = self
@@ -61,11 +73,15 @@ private final class OverlayController: NSObject {
     }
 
     private func finish(rect: NSRect, screen: NSScreen) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
         cleanup()
         completion(.success(SelectedRegion(rect: rect, screen: screen)))
     }
 
     private func cancel() {
+        guard !hasCompleted else { return }
+        hasCompleted = true
         cleanup()
         completion(.failure(CancellationError()))
     }
