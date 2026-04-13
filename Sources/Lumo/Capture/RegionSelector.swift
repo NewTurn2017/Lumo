@@ -1,8 +1,13 @@
 import AppKit
 
+struct SelectedRegion {
+    let rect: CGRect
+    let screen: NSScreen
+}
+
 enum RegionSelector {
     @MainActor
-    static func presentAndSelect() async throws -> CGRect {
+    static func presentAndSelect() async throws -> SelectedRegion {
         try await withCheckedThrowingContinuation { continuation in
             let controller = OverlayController { result in
                 switch result {
@@ -16,9 +21,8 @@ enum RegionSelector {
 }
 
 private final class OverlayController: NSObject {
-    typealias Completion = (Result<CGRect, Error>) -> Void
+    typealias Completion = (Result<SelectedRegion, Error>) -> Void
     private var windows: [NSWindow] = []
-    private var selectionView: SelectionView?
     private let completion: Completion
     /// Retains self until cleanup() — prevents deallocation before continuation resumes.
     private var keepAlive: OverlayController?
@@ -41,27 +45,18 @@ private final class OverlayController: NSObject {
             window.ignoresMouseEvents = false
             window.acceptsMouseMovedEvents = true
             let view = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size))
-            view.onFinish = { [weak self] rect in self?.finish(rect: rect, origin: screen.frame.origin) }
+            view.onFinish = { [weak self] rect in self?.finish(rect: rect, screen: screen) }
             view.onCancel = { [weak self] in self?.cancel() }
             window.contentView = view
             window.makeKeyAndOrderFront(nil)
-            if view.bounds.size == screen.frame.size {
-                selectionView = view
-            }
             windows.append(window)
         }
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func finish(rect: NSRect, origin: CGPoint) {
-        let global = CGRect(
-            x: rect.origin.x + origin.x,
-            y: rect.origin.y + origin.y,
-            width: rect.size.width,
-            height: rect.size.height
-        )
+    private func finish(rect: NSRect, screen: NSScreen) {
         cleanup()
-        completion(.success(global))
+        completion(.success(SelectedRegion(rect: rect, screen: screen)))
     }
 
     private func cancel() {
@@ -72,7 +67,7 @@ private final class OverlayController: NSObject {
     private func cleanup() {
         for w in windows { w.orderOut(nil) }
         windows.removeAll()
-        keepAlive = nil  // Release self-retain; ARC reclaims after this scope exits
+        keepAlive = nil
     }
 }
 

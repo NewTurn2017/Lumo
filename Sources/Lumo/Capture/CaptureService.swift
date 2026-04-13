@@ -12,23 +12,35 @@ protocol CaptureService {
 @available(macOS 14.0, *)
 final class ScreenCaptureKitCapture: CaptureService {
     func captureRegion() async throws -> CGImage {
-        let rect = try await RegionSelector.presentAndSelect()
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let display = content.displays.first(where: { NSRect($0.frame).contains(rect.origin) })
-                              ?? content.displays.first
+        let selection = try await RegionSelector.presentAndSelect()
+        let content = try await SCShareableContent.excludingDesktopWindows(
+            false, onScreenWindowsOnly: true
+        )
+        let displayID = Self.displayID(of: selection.screen)
+        guard let scDisplay = content.displays.first(where: { $0.displayID == displayID })
+            ?? content.displays.first
         else {
             throw TranslationError.malformedResponse(detail: "no display")
         }
-        let filter = SCContentFilter(display: display, excludingWindows: [])
-        let config = SCStreamConfiguration()
-        config.sourceRect = rect
-        config.width = Int(rect.width)
-        config.height = Int(rect.height)
-        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-        return image
-    }
-}
 
-private extension NSRect {
-    init(_ r: CGRect) { self.init(origin: r.origin, size: r.size) }
+        let sourceRect = CaptureCoordinates.displayLocalRect(
+            viewRect: selection.rect,
+            screenHeight: selection.screen.frame.height
+        )
+        let scale = selection.screen.backingScaleFactor
+
+        let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
+        let config = SCStreamConfiguration()
+        config.sourceRect = sourceRect
+        config.width  = Int((sourceRect.width  * scale).rounded())
+        config.height = Int((sourceRect.height * scale).rounded())
+        return try await SCScreenshotManager.captureImage(
+            contentFilter: filter, configuration: config
+        )
+    }
+
+    private static func displayID(of screen: NSScreen) -> CGDirectDisplayID {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        return screen.deviceDescription[key] as? CGDirectDisplayID ?? CGMainDisplayID()
+    }
 }
