@@ -1,11 +1,19 @@
 import AppKit
 import SwiftUI
 
+/// Borderless panel that can still become key — required so the popup gains focus
+/// and we can observe `didResignKey` to dismiss on outside clicks.
+private final class FocusablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 @MainActor
 final class PopupWindow: PopupPresenting {
     private var window: NSWindow?
     private let model = PopupModel()
     private var fadeTask: Task<Void, Never>?
+    private var resignObserver: NSObjectProtocol?
 
     init() {
         model.onClose = { [weak self] in self?.close() }
@@ -27,7 +35,10 @@ final class PopupWindow: PopupPresenting {
         model.text = ""
         model.errorMessage = ""
         ensureWindow()
-        window?.orderFrontRegardless()
+        centerOnActiveScreen()
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        observeResignKey()
     }
 
     func append(_ chunk: String) {
@@ -49,6 +60,7 @@ final class PopupWindow: PopupPresenting {
 
     func close() {
         fadeTask?.cancel()
+        removeResignObserver()
         window?.orderOut(nil)
     }
 
@@ -57,15 +69,15 @@ final class PopupWindow: PopupPresenting {
         fadeTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
-            await MainActor.run { self?.window?.orderOut(nil) }
+            await MainActor.run { self?.close() }
         }
     }
 
     private func ensureWindow() {
         if window != nil { return }
-        let w = NSPanel(
+        let w = FocusablePanel(
             contentRect: NSRect(x: 0, y: 0, width: 380, height: 260),
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -74,15 +86,40 @@ final class PopupWindow: PopupPresenting {
         w.isOpaque = false
         w.backgroundColor = .clear
         w.hasShadow = true
+        w.hidesOnDeactivate = false
+        w.isMovableByWindowBackground = true
         w.contentView = NSHostingView(rootView: PopupView(model: model))
-        if let screen = NSScreen.main {
-            let margin: CGFloat = 24
-            let origin = CGPoint(
-                x: screen.visibleFrame.maxX - 380 - margin,
-                y: screen.visibleFrame.minY + margin
-            )
-            w.setFrameOrigin(origin)
-        }
         window = w
+    }
+
+    private func centerOnActiveScreen() {
+        guard let w = window else { return }
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
+        guard let frame = screen?.visibleFrame else { return }
+        let size = w.frame.size
+        let origin = CGPoint(
+            x: frame.midX - size.width / 2,
+            y: frame.midY - size.height / 2
+        )
+        w.setFrameOrigin(origin)
+    }
+
+    private func observeResignKey() {
+        guard resignObserver == nil, let window else { return }
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.close() }
+        }
+    }
+
+    private func removeResignObserver() {
+        if let observer = resignObserver {
+            NotificationCenter.default.removeObserver(observer)
+            resignObserver = nil
+        }
     }
 }

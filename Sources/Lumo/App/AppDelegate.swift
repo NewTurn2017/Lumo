@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        Self.terminateOtherInstances()
         let settings = SettingsSnapshot.load()
         menu = MenuBarController()
         popup = PopupWindow()
@@ -90,6 +91,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 menu.send(.warningRaised(msg))
                 scheduleRetry(baseURL: baseURL, settings: settings)
             }
+        }
+    }
+
+    /// Ensures only one Lumo status item exists: kills prior Xcode-launched instances
+    /// that linger after rebuilds (LSUIElement apps aren't auto-terminated by Xcode).
+    private static func terminateOtherInstances() {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return }
+        let me = NSRunningApplication.current.processIdentifier
+        for app in NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            where app.processIdentifier != me {
+            app.forceTerminate()
         }
     }
 

@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import AppKit
 
 protocol PopupPresenting: AnyObject {
     func showLoading()
@@ -69,6 +70,7 @@ final class TranslationOrchestrator {
             presenter.showError("캡처 실패: \(error.localizedDescription)")
             return
         }
+        NSSound(named: "Pop")?.play()
         presenter.showLoading()
         await runStream(source: .image(image), target: .korean, recordSource: .image)
     }
@@ -80,6 +82,7 @@ final class TranslationOrchestrator {
         }
         lastOriginalClipboard = text
         let target: TargetLanguage = LanguageDetector.isKorean(text) ? .english : .korean
+        NSSound(named: "Pop")?.play()
         presenter.showLoading()
         await runStream(source: .text(text), target: target, recordSource: .text)
     }
