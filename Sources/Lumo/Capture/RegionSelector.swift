@@ -20,6 +20,11 @@ enum RegionSelector {
     }
 }
 
+private final class OverlayPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 private final class OverlayController: NSObject {
     typealias Completion = (Result<SelectedRegion, Error>) -> Void
     private var windows: [NSWindow] = []
@@ -31,27 +36,28 @@ private final class OverlayController: NSObject {
 
     func show() {
         keepAlive = self
+        NSApp.activate(ignoringOtherApps: true)
         for screen in NSScreen.screens {
-            let window = NSWindow(
+            let panel = OverlayPanel(
                 contentRect: screen.frame,
-                styleMask: .borderless,
+                styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false,
                 screen: screen
             )
-            window.level = .screenSaver
-            window.backgroundColor = NSColor.black.withAlphaComponent(0.2)
-            window.isOpaque = false
-            window.ignoresMouseEvents = false
-            window.acceptsMouseMovedEvents = true
+            panel.level = .screenSaver
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            panel.backgroundColor = NSColor.black.withAlphaComponent(0.2)
+            panel.isOpaque = false
+            panel.ignoresMouseEvents = false
+            panel.acceptsMouseMovedEvents = true
             let view = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size))
             view.onFinish = { [weak self] rect in self?.finish(rect: rect, screen: screen) }
             view.onCancel = { [weak self] in self?.cancel() }
-            window.contentView = view
-            window.makeKeyAndOrderFront(nil)
-            windows.append(window)
+            panel.contentView = view
+            panel.orderFrontRegardless()
+            windows.append(panel)
         }
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func finish(rect: NSRect, screen: NSScreen) {
