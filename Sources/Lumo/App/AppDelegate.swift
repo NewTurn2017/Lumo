@@ -1,7 +1,133 @@
 import AppKit
+import SwiftUI
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var menu: MenuBarController!
+    private var orchestrator: TranslationOrchestrator!
+    private var hotkey: HotkeyManager!
+    private var doubleCopy: DoubleCopyMonitor!
+    private var popup: PopupWindow!
+    private var clipboard: NSPasteboardClipboard!
+    private var translator: OllamaTranslator!
+    private var retryTask: Task<Void, Never>?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        let settings = SettingsSnapshot.load()
+        menu = MenuBarController()
+        popup = PopupWindow()
+        clipboard = NSPasteboardClipboard()
+
+        let baseURL = URL(string: settings.ollamaURL) ?? URL(string: "http://localhost:11434")!
+        let session: URLSession = {
+            let cfg = URLSessionConfiguration.default
+            cfg.httpMaximumConnectionsPerHost = 1
+            return URLSession(configuration: cfg)
+        }()
+        translator = OllamaTranslator(
+            baseURL: baseURL,
+            model: settings.model,
+            temperature: settings.temperature,
+            keepAlive: settings.keepAlive,
+            session: session,
+            maxImageLongEdge: settings.maxImageLongEdge
+        )
+        let wrapped = WrappedTranslator(
+            inner: translator,
+            firstToken: .seconds(settings.firstTokenTimeoutSec),
+            idle: .seconds(settings.idleTimeoutSec),
+            hard: .seconds(settings.hardTimeoutSec)
+        )
+
+        let captureService: CaptureService
+        if #available(macOS 14, *) {
+            captureService = ScreenCaptureKitCapture()
+        } else {
+            captureService = UnsupportedCaptureService()
+        }
+
+        orchestrator = TranslationOrchestrator(
+            capture: captureService,
+            translator: wrapped,
+            clipboard: clipboard,
+            presenter: popup,
+            history: HistoryStore()
+        )
+        popup.onRestore = { [weak orchestrator] in orchestrator?.restoreOriginalClipboard() }
+
+        hotkey = HotkeyManager { [weak orchestrator] in
+            Task { @MainActor in await orchestrator?.runCapture() }
+        }
+        hotkey.start()
+
+        if settings.doubleCopyEnabled {
+            doubleCopy = DoubleCopyMonitor(
+                thresholdMs: settings.doubleCopyThresholdMs,
+                clipboard: clipboard
+            ) { [weak orchestrator] in
+                Task { @MainActor in await orchestrator?.runText() }
+            }
+            doubleCopy.start()
+        }
+
+        OnboardingWindow.showIfNeeded()
+        runWarmup(baseURL: baseURL, settings: settings)
+    }
+
+    private func runWarmup(baseURL: URL, settings: SettingsSnapshot) {
+        Task { @MainActor in
+            let result = await Warmup.run(
+                baseURL: baseURL,
+                model: settings.model,
+                keepAlive: settings.keepAlive
+            )
+            switch result {
+            case .healthy:
+                menu.send(.warningCleared)
+            case .warning(let msg):
+                menu.send(.warningRaised(msg))
+                scheduleRetry(baseURL: baseURL, settings: settings)
+            }
+        }
+    }
+
+    private func scheduleRetry(baseURL: URL, settings: SettingsSnapshot) {
+        retryTask?.cancel()
+        retryTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+            runWarmup(baseURL: baseURL, settings: settings)
+        }
+    }
+}
+
+private final class UnsupportedCaptureService: CaptureService {
+    func captureRegion() async throws -> CGImage {
+        throw TranslationError.malformedResponse(detail: "Screen capture requires macOS 14+")
+    }
+}
+
+/// Wraps an inner Translator with the timeout Watchdog.
+final class WrappedTranslator: Translator {
+    private let inner: Translator
+    private let firstToken: Duration
+    private let idle: Duration
+    private let hard: Duration
+    init(inner: Translator, firstToken: Duration, idle: Duration, hard: Duration) {
+        self.inner = inner
+        self.firstToken = firstToken
+        self.idle = idle
+        self.hard = hard
+    }
+    func translate(source: TranslationSource, target: TargetLanguage)
+        -> AsyncThrowingStream<String, Error>
+    {
+        Watchdog.wrap(
+            inner.translate(source: source, target: target),
+            firstToken: firstToken,
+            idle: idle,
+            hard: hard
+        )
     }
 }
