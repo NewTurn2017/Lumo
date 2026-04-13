@@ -31,6 +31,12 @@ enum TranslationError: Error, Equatable {
     case emptyOutput
 }
 
+struct BuiltMessages: Equatable {
+    var system: String
+    var userContent: String
+    var images: [String]?
+}
+
 protocol Translator {
     func translate(source: TranslationSource, target: TargetLanguage)
         -> AsyncThrowingStream<String, Error>

@@ -1,11 +1,5 @@
 import Foundation
 
-struct BuiltMessages: Equatable {
-    var system: String
-    var userContent: String
-    var images: [String]?
-}
-
 enum PromptBuilder {
     static func messages(source: TranslationSource, target: TargetLanguage, base64: String?) -> BuiltMessages {
         let system = systemPrompt(target: target)
