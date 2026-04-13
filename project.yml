@@ -1,0 +1,46 @@
+name: Lumo
+options:
+  bundleIdPrefix: app.lumo
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    ENABLE_HARDENED_RUNTIME: YES
+packages:
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: "2.0.0"
+targets:
+  Lumo:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Lumo
+    dependencies:
+      - package: KeyboardShortcuts
+    info:
+      path: Sources/Lumo/Info.plist
+      properties:
+        LSUIElement: true
+        NSHumanReadableCopyright: ""
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSScreenCaptureUsageDescription: "Lumo captures a screen region you select to extract and translate its text."
+    entitlements:
+      path: Sources/Lumo/Lumo.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.network.client: true
+    scheme:
+      testTargets:
+        - LumoTests
+  LumoTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/LumoTests
+    dependencies:
+      - target: Lumo
