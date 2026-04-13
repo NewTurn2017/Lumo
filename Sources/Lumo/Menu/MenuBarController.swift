@@ -66,11 +66,20 @@ final class MenuBarController {
 
     private func render() {
         guard let button = statusItem.button else { return }
+        button.image = NSImage(named: "MenuBarIcon")
+        button.image?.isTemplate = true
+        button.toolTip = nil
+
         switch state {
-        case .idle:              button.title = "Lumo"
-        case .busy:              button.title = "Lumo ⟳"
-        case .warning(let msg):  button.title = "Lumo ⚠"; button.toolTip = msg
-        case .error(let msg):    button.title = "Lumo ✕"; button.toolTip = msg
+        case .idle:
+            button.appearsDisabled = false
+        case .busy:
+            button.appearsDisabled = false
+        case .warning(let msg):
+            button.toolTip = msg
+        case .error(let msg):
+            button.appearsDisabled = true
+            button.toolTip = msg
         }
     }
 }
