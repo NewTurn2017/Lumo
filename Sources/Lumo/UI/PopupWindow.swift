@@ -29,6 +29,10 @@ final class PopupWindow: PopupPresenting {
         set { model.onRestore = newValue }
     }
 
+    /// Fired on every close path (X button, click outside, fade). Safe to call
+    /// on a completed translation — `Task.cancel()` on a finished task is a no-op.
+    var onCancel: (() -> Void)?
+
     func showLoading() {
         fadeTask?.cancel()
         model.phase = .loading
@@ -61,6 +65,7 @@ final class PopupWindow: PopupPresenting {
     func close() {
         fadeTask?.cancel()
         removeResignObserver()
+        onCancel?()
         window?.orderOut(nil)
     }
 

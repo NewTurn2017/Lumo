@@ -41,22 +41,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hard: .seconds(settings.hardTimeoutSec)
         )
 
-        let captureService: CaptureService
-        if #available(macOS 14, *) {
-            captureService = ScreenCaptureKitCapture()
-        } else {
-            captureService = UnsupportedCaptureService()
-        }
+        let captureService: CaptureService = NativeScreenCapture()
 
         let presenter = MenuBarPresenter(popup: popup, menu: menu)
         orchestrator = TranslationOrchestrator(
             capture: captureService,
+            recognizer: VisionTextRecognizer(),
             translator: wrapped,
             clipboard: clipboard,
             presenter: presenter,
             history: HistoryStore()
         )
         popup.onRestore = { [weak orchestrator] in orchestrator?.restoreOriginalClipboard() }
+        popup.onCancel = { [weak orchestrator] in orchestrator?.cancelCurrent() }
 
         hotkey = HotkeyManager { [weak orchestrator] in
             Task { @MainActor in await orchestrator?.runCapture() }
@@ -142,12 +139,6 @@ private final class MenuBarPresenter: PopupPresenting {
     func close() {
         menu.send(.finishedSuccessfully)
         popup.close()
-    }
-}
-
-private final class UnsupportedCaptureService: CaptureService {
-    func captureRegion() async throws -> CGImage {
-        throw TranslationError.malformedResponse(detail: "Screen capture requires macOS 14+")
     }
 }
 
