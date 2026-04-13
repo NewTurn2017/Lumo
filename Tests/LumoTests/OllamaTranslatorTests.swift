@@ -119,11 +119,11 @@ final class OllamaTranslatorTests: XCTestCase {
         }
         XCTAssertEqual(out, "안녕")
         let body = try XCTUnwrap(StubURLProtocol.capturedBody)
-        let json = try JSONSerialization.jsonObject(with: body) as! [String: Any]
-        let messages = json["messages"] as! [[String: Any]]
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
         XCTAssertEqual(messages.count, 2)
         let user = messages[1]
-        let images = user["images"] as! [String]
+        let images = try XCTUnwrap(user["images"] as? [String])
         XCTAssertFalse(images[0].isEmpty)
     }
 
