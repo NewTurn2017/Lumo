@@ -127,6 +127,43 @@ final class OllamaTranslatorTests: XCTestCase {
         XCTAssertFalse(images[0].isEmpty)
     }
 
+    func test_imageToEnglish_includesBase64AndStreams() async throws {
+        StubURLProtocol.capturedBody = nil
+        StubURLProtocol.handler = { _ in
+            StubURLProtocol.Response(
+                statusCode: 200,
+                chunks: [
+                    #"{"message":{"content":"Hello"},"done":false}"# + "\n",
+                    #"{"message":{"content":""},"done":true}"# + "\n"
+                ],
+                chunkDelayMs: 0,
+                error: nil
+            )
+        }
+        let cg = makeImage()
+        let t = OllamaTranslator(
+            baseURL: URL(string: "http://localhost:11434")!,
+            model: "gemma4:e4b",
+            temperature: 0.2,
+            keepAlive: "30m",
+            session: makeSession()
+        )
+        var out = ""
+        for try await chunk in t.translate(source: .image(cg), target: .english) {
+            out += chunk
+        }
+        XCTAssertEqual(out, "Hello")
+        let body = try XCTUnwrap(StubURLProtocol.capturedBody)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
+        XCTAssertGreaterThanOrEqual(messages.count, 2)
+        let user = messages[1]
+        let images = try XCTUnwrap(user["images"] as? [String])
+        XCTAssertFalse(images[0].isEmpty)
+        let content = try XCTUnwrap(user["content"] as? String)
+        XCTAssertTrue(content.contains("English"), "Expected prompt to mention 'English', got: \(content)")
+    }
+
     private func makeImage() -> CGImage {
         let ctx = CGContext(
             data: nil, width: 10, height: 10,
