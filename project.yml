@@ -9,6 +9,10 @@ settings:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
     ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Developer ID Application"
+    DEVELOPMENT_TEAM: 2UANJX7ATM
+    PROVISIONING_PROFILE_SPECIFIER: ""
 packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
@@ -17,6 +21,9 @@ targets:
   Lumo:
     type: application
     platform: macOS
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     sources:
       - path: Sources/Lumo
     dependencies:
