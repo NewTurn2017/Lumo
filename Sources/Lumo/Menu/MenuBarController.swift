@@ -37,6 +37,27 @@ final class MenuBarController {
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         render()
+        setupMenu()
+    }
+
+    private func setupMenu() {
+        let menu = NSMenu()
+
+        let settingsItem = NSMenuItem(title: "설정...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(.separator())
+
+        let quitItem = NSMenuItem(title: "Lumo 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(quitItem)
+
+        statusItem.menu = menu
+    }
+
+    @objc private func openSettings() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func send(_ event: MenuBarEvent) {

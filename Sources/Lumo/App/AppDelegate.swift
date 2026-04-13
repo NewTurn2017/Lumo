@@ -47,11 +47,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             captureService = UnsupportedCaptureService()
         }
 
+        let presenter = MenuBarPresenter(popup: popup, menu: menu)
         orchestrator = TranslationOrchestrator(
             capture: captureService,
             translator: wrapped,
             clipboard: clipboard,
-            presenter: popup,
+            presenter: presenter,
             history: HistoryStore()
         )
         popup.onRestore = { [weak orchestrator] in orchestrator?.restoreOriginalClipboard() }
@@ -99,6 +100,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard !Task.isCancelled else { return }
             runWarmup(baseURL: baseURL, settings: settings)
         }
+    }
+}
+
+/// Routes PopupPresenting calls to both PopupWindow and MenuBarController.
+@MainActor
+private final class MenuBarPresenter: PopupPresenting {
+    private let popup: PopupWindow
+    private let menu: MenuBarController
+
+    init(popup: PopupWindow, menu: MenuBarController) {
+        self.popup = popup
+        self.menu = menu
+    }
+
+    func showLoading() {
+        menu.send(.beganTranslation)
+        popup.showLoading()
+    }
+    func append(_ chunk: String) { popup.append(chunk) }
+    func showDone(finalText: String) {
+        menu.send(.finishedSuccessfully)
+        popup.showDone(finalText: finalText)
+    }
+    func showError(_ message: String) {
+        menu.send(.failed(message))
+        popup.showError(message)
+    }
+    func close() {
+        menu.send(.finishedSuccessfully)
+        popup.close()
     }
 }
 

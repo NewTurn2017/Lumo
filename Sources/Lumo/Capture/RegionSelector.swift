@@ -20,10 +20,13 @@ private final class OverlayController: NSObject {
     private var windows: [NSWindow] = []
     private var selectionView: SelectionView?
     private let completion: Completion
+    /// Retains self until cleanup() — prevents deallocation before continuation resumes.
+    private var keepAlive: OverlayController?
 
     init(completion: @escaping Completion) { self.completion = completion }
 
     func show() {
+        keepAlive = self
         for screen in NSScreen.screens {
             let window = NSWindow(
                 contentRect: screen.frame,
@@ -69,6 +72,7 @@ private final class OverlayController: NSObject {
     private func cleanup() {
         for w in windows { w.orderOut(nil) }
         windows.removeAll()
+        keepAlive = nil  // Release self-retain; ARC reclaims after this scope exits
     }
 }
 
