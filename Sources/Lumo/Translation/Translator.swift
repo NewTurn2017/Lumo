@@ -19,7 +19,7 @@ enum TranslationSource: Equatable {
     }
 }
 
-enum TranslationError: Error, Equatable {
+enum TranslationError: Error, Equatable, LocalizedError {
     case serverUnreachable
     case modelNotFound(name: String)
     case httpStatus(code: Int, body: String)
@@ -29,6 +29,30 @@ enum TranslationError: Error, Equatable {
     case hardTimeout
     case cancelled
     case emptyOutput
+
+    var errorDescription: String? {
+        switch self {
+        case .serverUnreachable:
+            return "Ollama 서버에 연결할 수 없음"
+        case .modelNotFound(let name):
+            return "모델을 찾을 수 없음: \(name)"
+        case .httpStatus(let code, let body):
+            let trimmed = body.prefix(200)
+            return "Ollama HTTP \(code): \(trimmed)"
+        case .malformedResponse(let detail):
+            return "응답 형식 오류: \(detail)"
+        case .firstTokenTimeout:
+            return "응답 시작 시간 초과"
+        case .idleTimeout:
+            return "스트림 중단 (idle timeout)"
+        case .hardTimeout:
+            return "총 시간 초과"
+        case .cancelled:
+            return "취소됨"
+        case .emptyOutput:
+            return "(텍스트 없음)"
+        }
+    }
 }
 
 struct BuiltMessages: Equatable {

@@ -3,24 +3,27 @@ import XCTest
 
 @MainActor
 final class TranslationOrchestratorTests: XCTestCase {
-    func makeOrchestrator() -> (TranslationOrchestrator, MockTranslator, MockCaptureService, FakeClipboard, MockPopupPresenter, HistoryStore) {
+    func makeOrchestrator(ocrText: String = "Hello") -> (TranslationOrchestrator, MockTranslator, MockCaptureService, MockTextRecognizer, FakeClipboard, MockPopupPresenter, HistoryStore) {
         let translator = MockTranslator()
         let capture = MockCaptureService()
+        let recognizer = MockTextRecognizer()
+        recognizer.text = ocrText
         let clipboard = FakeClipboard()
         let presenter = MockPopupPresenter()
         let history = HistoryStore(defaults: UserDefaults(suiteName: "test.\(UUID().uuidString)")!)
         let orch = TranslationOrchestrator(
             capture: capture,
+            recognizer: recognizer,
             translator: translator,
             clipboard: clipboard,
             presenter: presenter,
             history: history
         )
-        return (orch, translator, capture, clipboard, presenter, history)
+        return (orch, translator, capture, recognizer, clipboard, presenter, history)
     }
 
     func test_capture_success_copiesClipboardAndAppendsHistory() async {
-        let (orch, translator, _, clipboard, presenter, history) = makeOrchestrator()
+        let (orch, translator, _, _, clipboard, presenter, history) = makeOrchestrator(ocrText: "Hello")
         translator.nextChunks = ["안", "녕"]
         await orch.runCapture()
         XCTAssertEqual(clipboard.string(), "안녕")
@@ -30,14 +33,21 @@ final class TranslationOrchestratorTests: XCTestCase {
     }
 
     func test_capture_serverUnreachable_showsError_noClipboardWrite() async {
-        let (orch, translator, _, clipboard, _, _) = makeOrchestrator()
+        let (orch, translator, _, _, clipboard, _, _) = makeOrchestrator(ocrText: "Hello")
         translator.nextError = TranslationError.serverUnreachable
         await orch.runCapture()
         XCTAssertNil(clipboard.string())
     }
 
-    func test_capture_emptyOutput_noClipboardWrite() async {
-        let (orch, translator, _, clipboard, presenter, _) = makeOrchestrator()
+    func test_capture_ocrEmpty_showsNoTextError() async {
+        let (orch, _, _, _, clipboard, presenter, _) = makeOrchestrator(ocrText: "")
+        await orch.runCapture()
+        XCTAssertNil(clipboard.string())
+        XCTAssertEqual(presenter.events.last, .error("(텍스트 없음)"))
+    }
+
+    func test_capture_emptyTranslatorOutput_noClipboardWrite() async {
+        let (orch, translator, _, _, clipboard, presenter, _) = makeOrchestrator(ocrText: "Hello")
         translator.nextChunks = []
         await orch.runCapture()
         XCTAssertNil(clipboard.string())
@@ -45,7 +55,7 @@ final class TranslationOrchestratorTests: XCTestCase {
     }
 
     func test_doubleCopy_english_to_korean() async {
-        let (orch, translator, _, clipboard, _, _) = makeOrchestrator()
+        let (orch, translator, _, _, clipboard, _, _) = makeOrchestrator()
         clipboard.setString("Hello world")
         translator.nextChunks = ["안녕 세상"]
         await orch.runText()
@@ -54,7 +64,7 @@ final class TranslationOrchestratorTests: XCTestCase {
     }
 
     func test_doubleCopy_korean_to_english() async {
-        let (orch, translator, _, clipboard, _, _) = makeOrchestrator()
+        let (orch, translator, _, _, clipboard, _, _) = makeOrchestrator()
         clipboard.setString("안녕하세요")
         translator.nextChunks = ["Hello"]
         await orch.runText()
@@ -63,7 +73,7 @@ final class TranslationOrchestratorTests: XCTestCase {
     }
 
     func test_doubleCopy_restorableOriginal() async {
-        let (orch, translator, _, clipboard, _, _) = makeOrchestrator()
+        let (orch, translator, _, _, clipboard, _, _) = makeOrchestrator()
         clipboard.setString("Hello")
         translator.nextChunks = ["안녕"]
         await orch.runText()
@@ -73,7 +83,7 @@ final class TranslationOrchestratorTests: XCTestCase {
     }
 
     func test_secondCaptureCancelsFirst() async {
-        let (orch, translator, _, _, _, _) = makeOrchestrator()
+        let (orch, translator, _, _, _, _, _) = makeOrchestrator(ocrText: "Hello")
         translator.nextChunks = []
         let t1 = Task { await orch.runCapture() }
         let t2 = Task { await orch.runCapture() }

@@ -13,6 +13,7 @@ protocol PopupPresenting: AnyObject {
 @MainActor
 final class TranslationOrchestrator {
     private let capture: CaptureService
+    private let recognizer: TextRecognizing
     private let translator: Translator
     private let clipboard: Clipboard
     private let presenter: PopupPresenting
@@ -23,12 +24,14 @@ final class TranslationOrchestrator {
 
     init(
         capture: CaptureService,
+        recognizer: TextRecognizing,
         translator: Translator,
         clipboard: Clipboard,
         presenter: PopupPresenting,
         history: HistoryStore
     ) {
         self.capture = capture
+        self.recognizer = recognizer
         self.translator = translator
         self.clipboard = clipboard
         self.presenter = presenter
@@ -53,7 +56,7 @@ final class TranslationOrchestrator {
         if let s = lastOriginalClipboard { clipboard.setString(s) }
     }
 
-    private func cancelCurrent() {
+    func cancelCurrent() {
         currentTask?.cancel()
         currentTask = nil
     }
@@ -65,14 +68,30 @@ final class TranslationOrchestrator {
         do {
             image = try await capture.captureRegion()
         } catch is CancellationError {
-            return  // User cancelled overlay — nothing to dismiss
+            return  // User cancelled picker — nothing to dismiss
         } catch {
             presenter.showError("캡처 실패: \(error.localizedDescription)")
             return
         }
         NSSound(named: "Pop")?.play()
         presenter.showLoading()
-        await runStream(source: .image(image), target: .korean, recordSource: .image)
+
+        let recognized: String
+        do {
+            recognized = try await recognizer.recognize(image)
+        } catch {
+            Log.capture.error("OCR failed: \(String(describing: error), privacy: .public)")
+            presenter.showError("OCR 실패: \(error.localizedDescription)")
+            return
+        }
+        let trimmed = recognized.trimmingCharacters(in: .whitespacesAndNewlines)
+        Log.capture.info("ocr text (\(trimmed.count) chars): \(trimmed.prefix(120), privacy: .public)")
+        guard !trimmed.isEmpty else {
+            presenter.showError("(텍스트 없음)")
+            return
+        }
+        let target: TargetLanguage = LanguageDetector.isKorean(trimmed) ? .english : .korean
+        await runStream(source: .text(trimmed), target: target, recordSource: .image)
     }
 
     private func _runText() async {
@@ -94,30 +113,16 @@ final class TranslationOrchestrator {
                 buffer += chunk
                 presenter.append(chunk)
             }
-        } catch TranslationError.serverUnreachable {
-            presenter.showError("Ollama 서버에 연결할 수 없음")
-            return
-        } catch TranslationError.modelNotFound(let name) {
-            presenter.showError("모델 없음: \(name)")
-            return
-        } catch TranslationError.firstTokenTimeout {
-            presenter.showError("응답 시작 시간 초과")
-            return
-        } catch TranslationError.idleTimeout {
-            presenter.showError("스트림 중단 (idle timeout)")
-            return
-        } catch TranslationError.hardTimeout {
-            presenter.showError("총 시간 초과")
-            return
         } catch is CancellationError {
             presenter.close()
             return
         } catch {
+            Log.translate.error("translate failed: \(String(describing: error), privacy: .public)")
             presenter.showError(error.localizedDescription)
             return
         }
         let trimmed = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || trimmed == "(텍스트 없음)" {
+        if trimmed.isEmpty {
             presenter.showError("(텍스트 없음)")
             return
         }
