@@ -44,6 +44,7 @@ struct SettingsView: View {
 
             Form {
                 Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { newValue in LaunchAtLogin.set(newValue) }
             }
             .padding(20)
             .tabItem { Text("Startup") }
