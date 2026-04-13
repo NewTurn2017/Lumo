@@ -21,6 +21,8 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> Response)?
     nonisolated(unsafe) static var capturedBody: Data?
 
+    // Named `loadingTask` rather than `task` because `URLProtocol.task` is an
+    // existing public property on the superclass.
     private var loadingTask: Task<Void, Never>?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -50,6 +52,7 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
                 if Task.isCancelled { return }
                 if response.chunkDelayMs > 0 {
                     try? await Task.sleep(for: .milliseconds(response.chunkDelayMs))
+                    if Task.isCancelled { return }
                 }
                 guard let self, !Task.isCancelled else { return }
                 self.client?.urlProtocol(self, didLoad: Data(chunk.utf8))
