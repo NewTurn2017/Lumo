@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 @testable import Lumo
 
@@ -89,5 +90,50 @@ final class OllamaTranslatorTests: XCTestCase {
         } catch {
             XCTFail("wrong error: \(error)")
         }
+    }
+
+    func test_imageTranslation_includesBase64AndStreams() async throws {
+        StubURLProtocol.capturedBody = nil
+        StubURLProtocol.handler = { _ in
+            StubURLProtocol.Response(
+                statusCode: 200,
+                chunks: [
+                    #"{"message":{"content":"안녕"},"done":false}"# + "\n",
+                    #"{"message":{"content":""},"done":true}"# + "\n"
+                ],
+                chunkDelayMs: 0,
+                error: nil
+            )
+        }
+        let cg = makeImage()
+        let t = OllamaTranslator(
+            baseURL: URL(string: "http://localhost:11434")!,
+            model: "gemma4:e4b",
+            temperature: 0.2,
+            keepAlive: "30m",
+            session: makeSession()
+        )
+        var out = ""
+        for try await chunk in t.translate(source: .image(cg), target: .korean) {
+            out += chunk
+        }
+        XCTAssertEqual(out, "안녕")
+        let body = try XCTUnwrap(StubURLProtocol.capturedBody)
+        let json = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+        let messages = json["messages"] as! [[String: Any]]
+        XCTAssertEqual(messages.count, 2)
+        let user = messages[1]
+        let images = user["images"] as! [String]
+        XCTAssertFalse(images[0].isEmpty)
+    }
+
+    private func makeImage() -> CGImage {
+        let ctx = CGContext(
+            data: nil, width: 10, height: 10,
+            bitsPerComponent: 8, bytesPerRow: 40,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        return ctx.makeImage()!
     }
 }
