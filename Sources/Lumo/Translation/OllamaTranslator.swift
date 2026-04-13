@@ -42,7 +42,7 @@ final class OllamaTranslator: Translator {
                     }
                     let messages = PromptBuilder.messages(source: source, target: target, base64: base64)
                     let body = try buildBody(messages: messages)
-                    var req = URLRequest(url: baseURL.appendingPathComponent("/api/chat"))
+                    var req = URLRequest(url: baseURL.appending(path: "api/chat"))
                     req.httpMethod = "POST"
                     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     req.httpBody = body
