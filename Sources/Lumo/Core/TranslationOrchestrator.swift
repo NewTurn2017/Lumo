@@ -58,17 +58,18 @@ final class TranslationOrchestrator {
     }
 
     private func _runCapture() async {
-        presenter.showLoading()
+        // showLoading is intentionally called AFTER captureRegion so the popup
+        // window does not steal key-window status from the capture overlay.
         let image: CGImage
         do {
             image = try await capture.captureRegion()
         } catch is CancellationError {
-            presenter.close()
-            return
+            return  // User cancelled overlay — nothing to dismiss
         } catch {
             presenter.showError("캡처 실패: \(error.localizedDescription)")
             return
         }
+        presenter.showLoading()
         await runStream(source: .image(image), target: .korean, recordSource: .image)
     }
 
