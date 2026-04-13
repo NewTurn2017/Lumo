@@ -44,3 +44,6 @@ targets:
       - path: Tests/LumoTests
     dependencies:
       - target: Lumo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
