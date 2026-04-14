@@ -10,7 +10,33 @@ enum Warmup {
         baseURL: URL,
         model: String,
         keepAlive: String,
+        backendType: String = "ollama",
         session: URLSession = .shared
+    ) async -> WarmupResult {
+        if backendType == "mlx" {
+            return await runMLX(baseURL: baseURL, session: session)
+        }
+        return await runOllama(baseURL: baseURL, model: model, keepAlive: keepAlive, session: session)
+    }
+
+    private static func runMLX(baseURL: URL, session: URLSession) async -> WarmupResult {
+        let req = URLRequest(url: baseURL.appending(path: "v1/models"))
+        do {
+            let (_, response) = try await session.data(for: req)
+            guard let http = response as? HTTPURLResponse else { return .warning("잘못된 응답") }
+            return http.statusCode == 200 ? .healthy : .warning("HTTP \(http.statusCode)")
+        } catch let err as URLError
+            where err.code == .cannotConnectToHost
+               || err.code == .cannotFindHost
+               || err.code == .networkConnectionLost {
+            return .warning("MLX 서버에 연결할 수 없음")
+        } catch {
+            return .warning(error.localizedDescription)
+        }
+    }
+
+    private static func runOllama(
+        baseURL: URL, model: String, keepAlive: String, session: URLSession
     ) async -> WarmupResult {
         var req = URLRequest(url: baseURL.appendingPathComponent("/api/chat"))
         req.httpMethod = "POST"
@@ -24,9 +50,7 @@ enum Warmup {
         req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         do {
             let (data, response) = try await session.data(for: req)
-            guard let http = response as? HTTPURLResponse else {
-                return .warning("잘못된 응답")
-            }
+            guard let http = response as? HTTPURLResponse else { return .warning("잘못된 응답") }
             if http.statusCode == 200 { return .healthy }
             if http.statusCode == 404,
                let body = String(data: data, encoding: .utf8),

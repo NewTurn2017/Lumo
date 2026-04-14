@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 enum SettingsKey {
+    static let backendType                  = "lumo.backendType"
     static let ollamaURL                    = "lumo.ollamaURL"
     static let model                        = "lumo.model"
     static let keepAlive                    = "lumo.keepAlive"
@@ -18,6 +19,7 @@ enum SettingsKey {
 }
 
 struct SettingsSnapshot: Equatable {
+    var backendType: String   // "mlx" | "ollama"
     var ollamaURL: String
     var model: String
     var keepAlive: String
@@ -32,8 +34,9 @@ struct SettingsSnapshot: Equatable {
     var hardTimeoutSec: Int
 
     static let defaults = SettingsSnapshot(
-        ollamaURL: "http://localhost:11434",
-        model: "gemma4:e4b",
+        backendType: "mlx",
+        ollamaURL: "http://localhost:8080",
+        model: "mlx-community/gemma-4-e4b-it-4bit",
         keepAlive: "30m",
         maxImageLongEdge: 1280,
         temperature: 0.2,
@@ -48,7 +51,8 @@ struct SettingsSnapshot: Equatable {
 
     static func load(from defaults: UserDefaults = .standard) -> SettingsSnapshot {
         var s = SettingsSnapshot.defaults
-        if let v = defaults.string(forKey: SettingsKey.ollamaURL) { s.ollamaURL = v }
+        if let v = defaults.string(forKey: SettingsKey.backendType) { s.backendType = v }
+        if let v = defaults.string(forKey: SettingsKey.ollamaURL)   { s.ollamaURL = v }
         if let v = defaults.string(forKey: SettingsKey.model)     { s.model = v }
         if let v = defaults.string(forKey: SettingsKey.keepAlive) { s.keepAlive = v }
         if defaults.object(forKey: SettingsKey.maxImageLongEdge) != nil {

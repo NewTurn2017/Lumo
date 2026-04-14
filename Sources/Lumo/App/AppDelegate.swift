@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var doubleCopy: DoubleCopyMonitor!
     private var popup: PopupWindow!
     private var clipboard: NSPasteboardClipboard!
-    private var translator: OllamaTranslator!
+    private var translator: (any Translator)!
     private var retryTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -20,20 +20,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popup = PopupWindow()
         clipboard = NSPasteboardClipboard()
 
-        let baseURL = URL(string: settings.ollamaURL) ?? URL(string: "http://localhost:11434")!
+        let defaultURL = settings.backendType == "mlx" ? "http://localhost:8080" : "http://localhost:11434"
+        let baseURL = URL(string: settings.ollamaURL) ?? URL(string: defaultURL)!
         let session: URLSession = {
             let cfg = URLSessionConfiguration.default
             cfg.httpMaximumConnectionsPerHost = 1
             return URLSession(configuration: cfg)
         }()
-        translator = OllamaTranslator(
-            baseURL: baseURL,
-            model: settings.model,
-            temperature: settings.temperature,
-            keepAlive: settings.keepAlive,
-            session: session,
-            maxImageLongEdge: settings.maxImageLongEdge
-        )
+        if settings.backendType == "mlx" {
+            translator = OpenAITranslator(
+                baseURL: baseURL,
+                model: settings.model,
+                temperature: settings.temperature,
+                session: session,
+                maxImageLongEdge: settings.maxImageLongEdge
+            )
+        } else {
+            translator = OllamaTranslator(
+                baseURL: baseURL,
+                model: settings.model,
+                temperature: settings.temperature,
+                keepAlive: settings.keepAlive,
+                session: session,
+                maxImageLongEdge: settings.maxImageLongEdge
+            )
+        }
         let wrapped = WrappedTranslator(
             inner: translator,
             firstToken: .seconds(settings.firstTokenTimeoutSec),
@@ -71,15 +82,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         OnboardingWindow.showIfNeeded()
-        runWarmup(baseURL: baseURL, settings: settings)
+        runWarmup(baseURL: baseURL, settings: settings, backendType: settings.backendType)
     }
 
-    private func runWarmup(baseURL: URL, settings: SettingsSnapshot) {
+    private func runWarmup(baseURL: URL, settings: SettingsSnapshot, backendType: String) {
         Task { @MainActor in
             let result = await Warmup.run(
                 baseURL: baseURL,
                 model: settings.model,
-                keepAlive: settings.keepAlive
+                keepAlive: settings.keepAlive,
+                backendType: backendType
             )
             switch result {
             case .healthy:
@@ -107,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         retryTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(30))
             guard !Task.isCancelled else { return }
-            runWarmup(baseURL: baseURL, settings: settings)
+            runWarmup(baseURL: baseURL, settings: settings, backendType: settings.backendType)
         }
     }
 }

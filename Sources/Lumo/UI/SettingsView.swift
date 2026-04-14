@@ -2,8 +2,9 @@ import SwiftUI
 import KeyboardShortcuts
 
 struct SettingsView: View {
-    @AppStorage(SettingsKey.ollamaURL)                 private var ollamaURL = "http://localhost:11434"
-    @AppStorage(SettingsKey.model)                     private var model = "gemma4:e4b"
+    @AppStorage(SettingsKey.backendType)               private var backendType = "mlx"
+    @AppStorage(SettingsKey.ollamaURL)                 private var ollamaURL = "http://localhost:8080"
+    @AppStorage(SettingsKey.model)                     private var model = "mlx-community/gemma-4-e4b-it-4bit"
     @AppStorage(SettingsKey.keepAlive)                 private var keepAlive = "30m"
     @AppStorage(SettingsKey.maxImageLongEdge)          private var maxImageLongEdge = 1280
     @AppStorage(SettingsKey.temperature)               private var temperature = 0.2
@@ -18,9 +19,14 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             Form {
-                TextField("Ollama URL", text: $ollamaURL)
+                Picker("Backend", selection: $backendType) {
+                    Text("MLX (mlx_lm.server)").tag("mlx")
+                    Text("Ollama").tag("ollama")
+                }
+                .pickerStyle(.segmented)
+                TextField("Server URL", text: $ollamaURL)
                 TextField("Model", text: $model)
-                TextField("keep_alive", text: $keepAlive)
+                TextField("keep_alive (Ollama only)", text: $keepAlive)
                 Stepper("Max image long edge: \(maxImageLongEdge)px", value: $maxImageLongEdge, in: 480...1920, step: 160)
                 Slider(value: $temperature, in: 0...1, step: 0.05) {
                     Text("Temperature: \(String(format: "%.2f", temperature))")
