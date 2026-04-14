@@ -17,6 +17,9 @@ packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     from: "2.0.0"
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.4"
 targets:
   Lumo:
     type: application
@@ -28,6 +31,7 @@ targets:
       - path: Sources/Lumo
     dependencies:
       - package: KeyboardShortcuts
+      - package: Sparkle
     info:
       path: Sources/Lumo/Info.plist
       properties:
