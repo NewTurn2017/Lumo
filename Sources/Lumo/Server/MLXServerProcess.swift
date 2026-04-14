@@ -62,7 +62,7 @@ extension MLXServerProcess {
         var executable: URL          // .../mlx-venv/bin/mlx_lm.server
         var modelID: String          // HF model id, e.g. "mlx-community/gemma-4-e4b-it-4bit"
         var host: String = "127.0.0.1"
-        var port: Int = 8080
+        var port: Int = 18080
         var maxTokens: Int = 2048
         var promptCacheSize: Int = 32768
         var logURL: URL              // .../Library/Logs/Lumo/mlx-server.log

@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         Self.terminateOtherInstances()
+        Self.migrateMLXPort()   // run before loading settings
         let settings = SettingsSnapshot.load()
         if settings.backendType == "mlx" && settings.mlxServerEnabled {
             Task { [mlxServerManager] in await mlxServerManager.enable() }
@@ -45,8 +46,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popup = PopupWindow()
         clipboard = NSPasteboardClipboard()
 
-        let defaultURL = settings.backendType == "mlx" ? "http://localhost:8080" : "http://localhost:11434"
-        let baseURL = URL(string: settings.ollamaURL) ?? URL(string: defaultURL)!
+        // For Ollama backend: if the URL was never changed from the MLX default (18080),
+        // fall back to Ollama's correct default port (11434) to avoid hitting the MLX server.
+        let mlxDefault = "http://localhost:18080"
+        let ollamaDefault = "http://localhost:11434"
+        let effectiveURL = (settings.backendType == "ollama" && settings.ollamaURL == mlxDefault)
+            ? ollamaDefault
+            : settings.ollamaURL
+        let baseURL = URL(string: effectiveURL) ?? URL(string: ollamaDefault)!
         let session: URLSession = {
             let cfg = URLSessionConfiguration.default
             cfg.httpMaximumConnectionsPerHost = 1
@@ -126,6 +133,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 scheduleRetry(baseURL: baseURL, settings: settings)
             }
         }
+    }
+
+    /// One-time migration: moves the MLX server URL from the old default port (8080)
+    /// to the new default (18080) to avoid collisions with OrbStack and similar tools
+    /// that bind to 0.0.0.0:8080.  Safe to call on every launch — no-op after migration.
+    private static func migrateMLXPort() {
+        let ud = UserDefaults.standard
+        guard ud.string(forKey: SettingsKey.ollamaURL) == "http://localhost:8080" else { return }
+        // Only migrate MLX users (nil backend == "mlx" default).
+        let backend = ud.string(forKey: SettingsKey.backendType) ?? "mlx"
+        guard backend == "mlx" else { return }
+        ud.set("http://localhost:18080", forKey: SettingsKey.ollamaURL)
     }
 
     /// Ensures only one Lumo status item exists: kills prior Xcode-launched instances

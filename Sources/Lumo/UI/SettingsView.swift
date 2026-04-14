@@ -5,7 +5,7 @@ import KeyboardShortcuts
 struct SettingsView: View {
     @EnvironmentObject private var mlxServerManager: MLXServerManager
     @AppStorage(SettingsKey.backendType)               private var backendType = "mlx"
-    @AppStorage(SettingsKey.ollamaURL)                 private var ollamaURL = "http://localhost:8080"
+    @AppStorage(SettingsKey.ollamaURL)                 private var ollamaURL = "http://localhost:18080"
     @AppStorage(SettingsKey.model)                     private var model = "mlx-community/gemma-4-e4b-it-4bit"
     @AppStorage(SettingsKey.keepAlive)                 private var keepAlive = "30m"
     @AppStorage(SettingsKey.maxImageLongEdge)          private var maxImageLongEdge = 1280
@@ -80,7 +80,7 @@ private struct GeneralTab: View {
                 .pickerStyle(.segmented)
 
                 LabeledContent("서버 URL") {
-                    TextField("", text: $ollamaURL, prompt: Text("http://localhost:8080"))
+                    TextField("", text: $ollamaURL, prompt: Text("http://localhost:18080"))
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 280)
                 }

@@ -43,7 +43,7 @@ struct SettingsSnapshot: Equatable {
 
     static let defaults = SettingsSnapshot(
         backendType: "mlx",
-        ollamaURL: "http://localhost:8080",
+        ollamaURL: "http://localhost:18080",
         model: "mlx-community/gemma-4-e4b-it-4bit",
         keepAlive: "30m",
         maxImageLongEdge: 1280,

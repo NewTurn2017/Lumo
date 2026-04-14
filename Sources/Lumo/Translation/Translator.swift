@@ -33,12 +33,12 @@ enum TranslationError: Error, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .serverUnreachable:
-            return "Ollama 서버에 연결할 수 없음"
+            return "서버에 연결할 수 없음"
         case .modelNotFound(let name):
             return "모델을 찾을 수 없음: \(name)"
         case .httpStatus(let code, let body):
             let trimmed = body.prefix(200)
-            return "Ollama HTTP \(code): \(trimmed)"
+            return "HTTP \(code): \(trimmed)"
         case .malformedResponse(let detail):
             return "응답 형식 오류: \(detail)"
         case .firstTokenTimeout:

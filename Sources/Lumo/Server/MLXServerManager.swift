@@ -15,11 +15,14 @@ protocol MLXDetecting {
 }
 
 @MainActor
-protocol MLXRunning: Sendable {
+protocol MLXRunning: AnyObject, Sendable {
     func start(modelID: String) throws
     func waitForReady() async -> Bool
     func stop()       // interactive — short grace (0.5s)
     func shutdown()   // app termination — long grace (3s)
+    /// Called (on MainActor) when the process exits unexpectedly.
+    /// Only fires for unintentional exits — intentional stop/shutdown sets this to nil first.
+    var onUnexpectedDeath: (@MainActor @Sendable () -> Void)? { get set }
 }
 
 // MARK: - Manager
@@ -92,6 +95,16 @@ final class MLXServerManager: ObservableObject {
         if await runner.waitForReady() {
             log.info("ready → .running")
             status = .running
+            // Monitor for unexpected process death (OOM kill, crash, etc.).
+            // Fires only while intentionally running; cleared on disable/shutdown.
+            // Auto-restarts immediately so the server is ready before the next
+            // translation attempt (model loading takes ~30-60 s).
+            runner.onUnexpectedDeath = { [weak self] in
+                guard let self else { return }
+                log.error("MLX server exited unexpectedly — auto-restarting")
+                self.status = .stopped
+                Task { [weak self] in await self?.enable() }
+            }
         } else {
             log.error("waitForReady timed out")
             runner.stop()
@@ -100,6 +113,7 @@ final class MLXServerManager: ObservableObject {
     }
 
     func disable() {
+        runner.onUnexpectedDeath = nil   // prevent spurious callback during intentional stop
         runner.stop()
         status = .stopped
     }
@@ -108,6 +122,7 @@ final class MLXServerManager: ObservableObject {
     /// Uses the long-grace (3s) path — acceptable during app quit but
     /// not during interactive disable, which calls `runner.stop()`.
     func shutdown() {
+        runner.onUnexpectedDeath = nil   // prevent spurious callback during intentional shutdown
         runner.shutdown()
         status = .stopped
     }
@@ -242,10 +257,11 @@ final class SubprocessMLXRunner: MLXRunning {
     let baseURL: URL
     let session: URLSession
     private var handle: MLXServerProcess.Handle?
+    var onUnexpectedDeath: (@MainActor @Sendable () -> Void)?
 
     init(
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
-        baseURL: URL = URL(string: "http://127.0.0.1:8080")!,
+        baseURL: URL = URL(string: "http://127.0.0.1:18080")!,
         session: URLSession = .shared
     ) {
         self.home = home
@@ -286,6 +302,16 @@ final class SubprocessMLXRunner: MLXRunning {
             )
         }
         log.info("Process alive after 250ms, storing handle")
+        // Detect unexpected process exits (OOM kill, crash, etc.).
+        // Guard: if handle is nil when the handler fires, it was an intentional stop
+        // (stop()/shutdown() clear handle BEFORE terminating the process).
+        h.process.terminationHandler = { [weak self] (_: Process) in
+            Task { @MainActor [weak self] in
+                guard let self, self.handle != nil else { return }
+                self.handle = nil
+                self.onUnexpectedDeath?()
+            }
+        }
         handle = h
     }
 

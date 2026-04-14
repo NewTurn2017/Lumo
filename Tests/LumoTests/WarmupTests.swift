@@ -60,6 +60,6 @@ final class WarmupTests: XCTestCase {
             keepAlive: "30m",
             session: session
         )
-        XCTAssertEqual(result, .warning("Ollama 서버에 연결할 수 없음"))
+        XCTAssertEqual(result, .warning("서버에 연결할 수 없음"))
     }
 }

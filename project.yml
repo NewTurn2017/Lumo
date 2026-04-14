@@ -35,8 +35,8 @@ targets:
     info:
       path: Sources/Lumo/Info.plist
       properties:
-        CFBundleShortVersionString: "1.1.0"
-        CFBundleVersion: "3"
+        CFBundleShortVersionString: "1.2.0"
+        CFBundleVersion: "4"
         LSUIElement: true
         NSHumanReadableCopyright: ""
         NSAppTransportSecurity:

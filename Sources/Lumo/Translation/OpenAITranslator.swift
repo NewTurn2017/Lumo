@@ -56,6 +56,13 @@ final class OpenAITranslator: Translator {
                     if http.statusCode >= 400 {
                         var bodyText = ""
                         for try await line in bytes.lines { bodyText += line }
+                        // A 404 with FastAPI's {"detail":"Not Found"} body means the wrong
+                        // server is answering on the port (e.g., OrbStack when the MLX
+                        // server has died).  Map it to serverUnreachable so the user sees
+                        // "서버에 연결할 수 없음" rather than a confusing HTTP 404.
+                        if http.statusCode == 404 && bodyText.contains("\"detail\"") {
+                            throw TranslationError.serverUnreachable
+                        }
                         throw TranslationError.httpStatus(code: http.statusCode, body: bodyText)
                     }
 

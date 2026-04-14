@@ -27,7 +27,7 @@ final class MLXServerProcessReadinessTests: XCTestCase {
             StubURLProtocol.Response(statusCode: 200, chunks: [""], chunkDelayMs: 0, error: nil)
         }
         let ready = await MLXServerProcess.waitForReady(
-            baseURL: URL(string: "http://127.0.0.1:8080")!,
+            baseURL: URL(string: "http://127.0.0.1:18080")!,
             session: stubbedSession(),
             pollInterval: .milliseconds(10),
             timeout: .seconds(1)
@@ -40,7 +40,7 @@ final class MLXServerProcessReadinessTests: XCTestCase {
             StubURLProtocol.Response(statusCode: 503, chunks: [""], chunkDelayMs: 0, error: nil)
         }
         let ready = await MLXServerProcess.waitForReady(
-            baseURL: URL(string: "http://127.0.0.1:8080")!,
+            baseURL: URL(string: "http://127.0.0.1:18080")!,
             session: stubbedSession(),
             pollInterval: .milliseconds(10),
             timeout: .milliseconds(100)
@@ -66,7 +66,7 @@ final class MLXServerProcessReadinessTests: XCTestCase {
         }
 
         let ready = await MLXServerProcess.waitForReady(
-            baseURL: URL(string: "http://127.0.0.1:8080")!,
+            baseURL: URL(string: "http://127.0.0.1:18080")!,
             session: stubbedSession(),
             pollInterval: .milliseconds(10),
             timeout: .seconds(1)
@@ -83,7 +83,7 @@ final class MLXServerProcessReadinessTests: XCTestCase {
             return StubURLProtocol.Response(statusCode: 200, chunks: [""], chunkDelayMs: 0, error: nil)
         }
         let ready = await MLXServerProcess.waitForReady(
-            baseURL: URL(string: "http://127.0.0.1:8080")!,
+            baseURL: URL(string: "http://127.0.0.1:18080")!,
             session: stubbedSession(),
             pollInterval: .milliseconds(10),
             timeout: .zero

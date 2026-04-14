@@ -59,7 +59,7 @@ final class OllamaTranslator: Translator {
                     if http.statusCode == 404 {
                         var bodyText = ""
                         for try await line in bytes.lines { bodyText += line }
-                        if bodyText.contains("not found") {
+                        if bodyText.lowercased().contains("not found") {
                             throw TranslationError.modelNotFound(name: model)
                         }
                         throw TranslationError.httpStatus(code: 404, body: bodyText)

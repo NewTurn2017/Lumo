@@ -5,7 +5,7 @@ final class SettingsTests: XCTestCase {
     func test_defaults_matchSpec() {
         let s = SettingsSnapshot.defaults
         XCTAssertEqual(s.backendType, "mlx")
-        XCTAssertEqual(s.ollamaURL, "http://localhost:8080")
+        XCTAssertEqual(s.ollamaURL, "http://localhost:18080")
         XCTAssertEqual(s.model, "mlx-community/gemma-4-e4b-it-4bit")
         XCTAssertEqual(s.keepAlive, "30m")
         XCTAssertEqual(s.maxImageLongEdge, 1280)

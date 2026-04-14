@@ -106,6 +106,45 @@ final class MLXServerManagerStateTests: XCTestCase {
         XCTAssertTrue(runner.didStop)
     }
 
+    func test_unexpectedDeath_autorestartsServer() async throws {
+        let runner = FakeRunner(readiness: true)
+        let sut = MLXServerManager(
+            modelID: "mlx-community/gemma-4-e4b-it-4bit",
+            installer: FakeInstaller(outcome: .success),
+            detector: FakeDetector(modelPath: URL(fileURLWithPath: "/tmp/model")),
+            runner: runner
+        )
+        await sut.enable()
+        XCTAssertEqual(sut.status, .running)
+        runner.didStart = false   // reset to detect the restart call
+
+        runner.simulateUnexpectedDeath()
+
+        // Immediate synchronous transition to .stopped (before auto-restart Task runs)
+        XCTAssertEqual(sut.status, .stopped)
+
+        // Allow the auto-restart Task to run; FakeRunner is synchronous so this is fast
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(sut.status, .running, "server must auto-restart after unexpected exit")
+        XCTAssertTrue(runner.didStart, "start() must be called again during restart")
+    }
+
+    func test_disable_clears_onUnexpectedDeath_callback() async {
+        let runner = FakeRunner(readiness: true)
+        let sut = MLXServerManager(
+            modelID: "mlx-community/gemma-4-e4b-it-4bit",
+            installer: FakeInstaller(outcome: .success),
+            detector: FakeDetector(modelPath: URL(fileURLWithPath: "/tmp/model")),
+            runner: runner
+        )
+        await sut.enable()
+        XCTAssertNotNil(runner.onUnexpectedDeath, "callback must be set after enable")
+
+        sut.disable()
+
+        XCTAssertNil(runner.onUnexpectedDeath, "disable must clear callback to avoid spurious fires")
+    }
+
     func test_managerShutdown_callsRunnerShutdownNotStop() async {
         let runner = FakeRunner(readiness: true)
         let sut = MLXServerManager(
@@ -158,12 +197,21 @@ private final class FakeRunner: MLXRunning {
     var didStop = false
     var didShutdown = false
     var startedWithModelID: String?
+    var onUnexpectedDeath: (@MainActor @Sendable () -> Void)?
     init(readiness: Bool) { self.readiness = readiness }
     func start(modelID: String) throws {
         didStart = true
         startedWithModelID = modelID
     }
     func waitForReady() async -> Bool { readiness }
-    func stop() { didStop = true }
-    func shutdown() { didShutdown = true }
+    func stop() {
+        onUnexpectedDeath = nil   // mirrors SubprocessMLXRunner behaviour
+        didStop = true
+    }
+    func shutdown() {
+        onUnexpectedDeath = nil
+        didShutdown = true
+    }
+    /// Simulates an unexpected crash (e.g., OOM kill).
+    func simulateUnexpectedDeath() { onUnexpectedDeath?() }
 }

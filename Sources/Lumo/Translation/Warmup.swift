@@ -54,7 +54,7 @@ enum Warmup {
             if http.statusCode == 200 { return .healthy }
             if http.statusCode == 404,
                let body = String(data: data, encoding: .utf8),
-               body.contains("not found") {
+               body.lowercased().contains("not found") {
                 return .warning("model `\(model)` not pulled")
             }
             return .warning("HTTP \(http.statusCode)")
@@ -62,7 +62,7 @@ enum Warmup {
             where err.code == .cannotConnectToHost
                || err.code == .cannotFindHost
                || err.code == .networkConnectionLost {
-            return .warning("Ollama 서버에 연결할 수 없음")
+            return .warning("서버에 연결할 수 없음")
         } catch {
             return .warning(error.localizedDescription)
         }

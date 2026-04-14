@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.1</string>
+	<string>1.2.0</string>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>4</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -29,11 +29,11 @@
 	<string></string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Lumo captures a screen region you select to extract and translate its text.</string>
-	<key>SUPublicEDKey</key>
-	<string>44JMfuhD9wodqkPx/GL+xHWteYRACSO9XJU6KtC31WU=</string>
-	<key>SUFeedURL</key>
-	<string>https://newturn2017.github.io/Lumo/appcast.xml</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://newturn2017.github.io/Lumo/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>44JMfuhD9wodqkPx/GL+xHWteYRACSO9XJU6KtC31WU=</string>
 </dict>
 </plist>
