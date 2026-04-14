@@ -35,11 +35,16 @@ targets:
     info:
       path: Sources/Lumo/Info.plist
       properties:
+        CFBundleShortVersionString: "1.0.1"
+        CFBundleVersion: "2"
         LSUIElement: true
         NSHumanReadableCopyright: ""
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSScreenCaptureUsageDescription: "Lumo captures a screen region you select to extract and translate its text."
+        SUPublicEDKey: "44JMfuhD9wodqkPx/GL+xHWteYRACSO9XJU6KtC31WU="
+        SUFeedURL: "https://newturn2017.github.io/Lumo/appcast.xml"
+        SUEnableAutomaticChecks: true
     entitlements:
       path: Sources/Lumo/Lumo.entitlements
       properties:
