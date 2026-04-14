@@ -74,4 +74,21 @@ final class MLXServerProcessReadinessTests: XCTestCase {
         XCTAssertTrue(ready)
         XCTAssertGreaterThanOrEqual(counter.value, 3, "Should have probed at least 3 times (2×503 + 1×200)")
     }
+
+    func test_waitForReady_firesAtLeastOneProbe_whenTimeoutIsZero() async {
+        final class Counter { var value = 0; func increment() { value += 1 } }
+        let counter = Counter()
+        StubURLProtocol.handler = { @Sendable _ in
+            counter.increment()
+            return StubURLProtocol.Response(statusCode: 200, chunks: [""], chunkDelayMs: 0, error: nil)
+        }
+        let ready = await MLXServerProcess.waitForReady(
+            baseURL: URL(string: "http://127.0.0.1:8080")!,
+            session: stubbedSession(),
+            pollInterval: .milliseconds(10),
+            timeout: .zero
+        )
+        XCTAssertTrue(ready, "waitForReady must fire at least one probe even with .zero timeout")
+        XCTAssertGreaterThanOrEqual(counter.value, 1)
+    }
 }
