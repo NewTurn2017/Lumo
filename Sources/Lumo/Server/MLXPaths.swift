@@ -36,4 +36,22 @@ enum MLXPaths {
     static func hfFolderName(modelID: String) -> String {
         "models--" + modelID.split(separator: "/").joined(separator: "--")
     }
+
+    /// Returns the absolute path of the HF cache directory for `modelID`
+    /// if it exists on disk, otherwise nil.
+    static func detectModel(
+        modelID: String,
+        home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        fileManager: FileManager = .default
+    ) -> URL? {
+        let folder = hfHubRoot(home: home)
+            .appendingPathComponent(hfFolderName(modelID: modelID), isDirectory: true)
+        var isDir: ObjCBool = false
+        guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDir),
+              isDir.boolValue
+        else {
+            return nil
+        }
+        return folder
+    }
 }
