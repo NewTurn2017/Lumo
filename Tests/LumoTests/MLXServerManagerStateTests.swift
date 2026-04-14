@@ -131,7 +131,8 @@ private final class FakeDetector: MLXDetecting {
     func detect(modelID: String) -> URL? { result }
 }
 
-private final class FakeRunner: MLXRunning, @unchecked Sendable {
+@MainActor
+private final class FakeRunner: MLXRunning {
     let readiness: Bool
     var didStart = false
     var didStop = false

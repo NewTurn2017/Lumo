@@ -11,6 +11,7 @@ protocol MLXDetecting {
     func detect(modelID: String) -> URL?
 }
 
+@MainActor
 protocol MLXRunning: Sendable {
     func start(modelPath: URL) throws
     func waitForReady() async -> Bool
@@ -99,23 +100,44 @@ final class MLXServerManager: ObservableObject {
 
 // MARK: - Real adapters
 
+/// Reference-typed byte buffer used to safely collect subprocess output
+/// from a background drain. All writes happen on a single background
+/// queue, then ShellRunner.run `.wait()`s before reading — so this is
+/// safe to mark `@unchecked Sendable`.
+private final class DataBox: @unchecked Sendable {
+    var data = Data()
+}
+
 enum ShellRunner {
     /// Runs a command to completion and returns (exitCode, stderr). stdout is
-    /// captured but discarded. Used by the installer for one-shot commands.
+    /// discarded (routed to /dev/null). Used by the installer for one-shot
+    /// commands.
     static func run(_ executable: URL, _ args: [String]) throws -> (Int32, String) {
         let proc = Process()
         proc.executableURL = executable
         proc.arguments = args
+
         let errPipe = Pipe()
-        let outPipe = Pipe()
         proc.standardError = errPipe
-        proc.standardOutput = outPipe
+        proc.standardOutput = FileHandle.nullDevice  // discard stdout entirely
+
         try proc.run()
+
+        // Drain stderr concurrently to avoid pipe-buffer deadlock during
+        // waitUntilExit(). readDataToEndOfFile blocks until the write side
+        // closes (which happens when the subprocess exits).
+        let errBox = DataBox()
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.global(qos: .utility).async {
+            errBox.data = errPipe.fileHandleForReading.readDataToEndOfFile()
+            group.leave()
+        }
+
         proc.waitUntilExit()
-        let err = String(
-            data: errPipe.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8
-        ) ?? ""
+        group.wait()
+
+        let err = String(data: errBox.data, encoding: .utf8) ?? ""
         return (proc.terminationStatus, err)
     }
 }
@@ -195,10 +217,12 @@ struct FileSystemMLXDetector: MLXDetecting {
     }
 }
 
-/// Real runner. Marked `@unchecked Sendable` because all mutations to
-/// `handle` originate on the MainActor via `MLXServerManager`. If that
-/// invariant is ever broken, add a serial queue or make this an actor.
-final class SubprocessMLXRunner: MLXRunning, @unchecked Sendable {
+/// Real runner. Pinned to `@MainActor` for compile-time enforcement of
+/// the "all mutations originate on MainActor" invariant. Production
+/// construction goes through `MLXServerManager.live(modelID:)`, which
+/// is itself MainActor-isolated.
+@MainActor
+final class SubprocessMLXRunner: MLXRunning {
     let home: URL
     let baseURL: URL
     let session: URLSession
