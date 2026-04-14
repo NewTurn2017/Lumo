@@ -241,12 +241,68 @@ final class SubprocessMLXRunner: MLXRunning {
 
     func start(modelID: String) throws {
         stop()  // idempotent: kill any lingering handle from a prior cycle
+        // Reap any orphan mlx_lm.server occupying the port from a previous
+        // crash / kill -9 / Xcode rebuild. Without this the new spawn would
+        // hit EADDRINUSE, exit immediately, and waitForReady would silently
+        // adopt the orphan — the manager would think it's running but its
+        // handle would point at a dead child, so disable() couldn't kill
+        // the actual server.
+        Self.reapOrphanOnPort(baseURL.port ?? 8080)
         let opts = MLXServerProcess.LaunchOptions(
             executable: MLXPaths.serverExecutable(home: home),
             modelID: modelID,
             logURL: Self.logURL()
         )
-        handle = try MLXServerProcess.start(opts)
+        let h = try MLXServerProcess.start(opts)
+        // Defensive: if mlx_lm.server died immediately (bad args, bind failure,
+        // missing model), `process.isRunning` flips false within ~200ms. Detect
+        // and surface as an error instead of stashing a dead handle.
+        Thread.sleep(forTimeInterval: 0.25)
+        guard h.process.isRunning else {
+            throw NSError(
+                domain: "SubprocessMLXRunner",
+                code: 100,
+                userInfo: [NSLocalizedDescriptionKey:
+                    "mlx_lm.server 가 시작 직후 종료되었습니다. 로그를 확인하세요: \(h.logURL.path)"]
+            )
+        }
+        handle = h
+    }
+
+    private static func reapOrphanOnPort(_ port: Int) {
+        // lsof -ti tcp:<port> -sTCP:LISTEN → newline-separated PIDs
+        let lsof = Process()
+        lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        lsof.arguments = ["-ti", "tcp:\(port)", "-sTCP:LISTEN"]
+        let outPipe = Pipe()
+        lsof.standardOutput = outPipe
+        lsof.standardError = FileHandle.nullDevice
+        do { try lsof.run() } catch { return }
+        lsof.waitUntilExit()
+        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        guard let text = String(data: data, encoding: .utf8) else { return }
+        let pids = text.split(whereSeparator: { $0.isNewline }).compactMap { Int32($0) }
+        guard !pids.isEmpty else { return }
+        for pid in pids { kill(pid, SIGTERM) }
+        // Wait up to ~1s for graceful exit before SIGKILL
+        for _ in 0..<20 {
+            Thread.sleep(forTimeInterval: 0.05)
+            if !Self.isPortInUse(port) { return }
+        }
+        for pid in pids { kill(pid, SIGKILL) }
+        // Brief settle so the kernel releases the socket
+        Thread.sleep(forTimeInterval: 0.1)
+    }
+
+    private static func isPortInUse(_ port: Int) -> Bool {
+        let lsof = Process()
+        lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        lsof.arguments = ["-ti", "tcp:\(port)", "-sTCP:LISTEN"]
+        lsof.standardOutput = FileHandle.nullDevice
+        lsof.standardError = FileHandle.nullDevice
+        do { try lsof.run() } catch { return false }
+        lsof.waitUntilExit()
+        return lsof.terminationStatus == 0
     }
 
     func waitForReady() async -> Bool {

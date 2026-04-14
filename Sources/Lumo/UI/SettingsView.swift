@@ -20,71 +20,200 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            Form {
-                Picker("Backend", selection: $backendType) {
-                    Text("MLX (mlx_lm.server)").tag("mlx")
+            GeneralTab(
+                backendType: $backendType,
+                ollamaURL: $ollamaURL,
+                model: $model,
+                keepAlive: $keepAlive,
+                maxImageLongEdge: $maxImageLongEdge,
+                temperature: $temperature
+            )
+            .tabItem { Label("일반", systemImage: "gearshape") }
+
+            DoubleCopyTab(
+                doubleCopyEnabled: $doubleCopyEnabled,
+                doubleCopyThresholdMs: $doubleCopyThresholdMs,
+                overwrite: $overwrite
+            )
+            .tabItem { Label("복사 단축", systemImage: "doc.on.doc") }
+
+            StartupTab(launchAtLogin: $launchAtLogin)
+                .tabItem { Label("시작", systemImage: "power") }
+
+            DebugTab(
+                firstTokenTimeoutSec: $firstTokenTimeoutSec,
+                idleTimeoutSec: $idleTimeoutSec,
+                hardTimeoutSec: $hardTimeoutSec
+            )
+            .tabItem { Label("디버그", systemImage: "ladybug") }
+        }
+        .frame(width: 560, height: 460)
+    }
+}
+
+// MARK: - General
+
+private struct GeneralTab: View {
+    @Binding var backendType: String
+    @Binding var ollamaURL: String
+    @Binding var model: String
+    @Binding var keepAlive: String
+    @Binding var maxImageLongEdge: Int
+    @Binding var temperature: Double
+
+    var body: some View {
+        Form {
+            Section("백엔드") {
+                Picker("종류", selection: $backendType) {
+                    Text("MLX").tag("mlx")
                     Text("Ollama").tag("ollama")
                 }
                 .pickerStyle(.segmented)
-                TextField("Server URL", text: $ollamaURL)
-                TextField("Model", text: $model)
-                TextField("keep_alive (Ollama only)", text: $keepAlive)
-                Stepper("Max image long edge: \(maxImageLongEdge)px", value: $maxImageLongEdge, in: 480...1920, step: 160)
-                Slider(value: $temperature, in: 0...1, step: 0.05) {
-                    Text("Temperature: \(String(format: "%.2f", temperature))")
+
+                LabeledContent("서버 URL") {
+                    TextField("", text: $ollamaURL, prompt: Text("http://localhost:8080"))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 280)
                 }
-                KeyboardShortcuts.Recorder("Capture hotkey", name: .captureAndTranslate)
-                if backendType == "mlx" {
-                    Divider()
+
+                LabeledContent("모델") {
+                    TextField("", text: $model)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 280)
+                }
+
+                if backendType == "ollama" {
+                    LabeledContent("keep_alive") {
+                        TextField("", text: $keepAlive)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 100)
+                    }
+                }
+            }
+
+            if backendType == "mlx" {
+                Section("MLX 서버") {
                     MLXServerSection()
                 }
             }
-            .padding(20)
-            .tabItem { Text("General") }
 
-            Form {
-                Toggle("Enable double ⌘C", isOn: $doubleCopyEnabled)
-                Picker("Double-tap threshold", selection: $doubleCopyThresholdMs) {
+            Section("번역") {
+                LabeledContent("Temperature") {
+                    HStack(spacing: 8) {
+                        Slider(value: $temperature, in: 0...1, step: 0.05)
+                            .frame(maxWidth: 200)
+                        Text(String(format: "%.2f", temperature))
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                }
+                LabeledContent("이미지 최대 변") {
+                    HStack(spacing: 6) {
+                        Text("\(maxImageLongEdge)")
+                            .font(.system(.body, design: .monospaced))
+                        Text("px")
+                            .foregroundColor(.secondary)
+                        Stepper("", value: $maxImageLongEdge, in: 480...1920, step: 160)
+                            .labelsHidden()
+                    }
+                }
+            }
+
+            Section("단축키") {
+                LabeledContent("캡처 + 번역") {
+                    KeyboardShortcuts.Recorder("", name: .captureAndTranslate)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - Double Copy
+
+private struct DoubleCopyTab: View {
+    @Binding var doubleCopyEnabled: Bool
+    @Binding var doubleCopyThresholdMs: Int
+    @Binding var overwrite: Bool
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("이중 ⌘C 감지 사용", isOn: $doubleCopyEnabled)
+                Picker("두 번 누름 간격", selection: $doubleCopyThresholdMs) {
                     Text("200 ms").tag(200)
                     Text("300 ms").tag(300)
                     Text("500 ms").tag(500)
                 }
-                Toggle("Overwrite clipboard with translation", isOn: $overwrite)
+                Toggle("번역 결과로 클립보드 덮어쓰기", isOn: $overwrite)
+            } footer: {
+                Text("⌘C 를 빠르게 두 번 누르면 클립보드 텍스트를 즉시 번역합니다.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
             }
-            .padding(20)
-            .tabItem { Text("Double Copy") }
-
-            Form {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { newValue in LaunchAtLogin.set(newValue) }
-            }
-            .padding(20)
-            .tabItem { Text("Startup") }
-
-            Form {
-                Stepper("First-token timeout: \(firstTokenTimeoutSec)s", value: $firstTokenTimeoutSec, in: 5...60)
-                Stepper("Idle timeout: \(idleTimeoutSec)s", value: $idleTimeoutSec, in: 2...30)
-                Stepper("Hard timeout: \(hardTimeoutSec)s", value: $hardTimeoutSec, in: 10...600)
-            }
-            .padding(20)
-            .tabItem { Text("Debug") }
         }
-        .frame(width: 480, height: 360)
+        .formStyle(.grouped)
     }
 }
+
+// MARK: - Startup
+
+private struct StartupTab: View {
+    @Binding var launchAtLogin: Bool
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("로그인 시 자동 실행", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { newValue in LaunchAtLogin.set(newValue) }
+            } footer: {
+                Text("Mac 에 로그인할 때 Lumo 가 자동으로 메뉴바에 나타납니다.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - Debug
+
+private struct DebugTab: View {
+    @Binding var firstTokenTimeoutSec: Int
+    @Binding var idleTimeoutSec: Int
+    @Binding var hardTimeoutSec: Int
+
+    var body: some View {
+        Form {
+            Section {
+                Stepper("첫 토큰: \(firstTokenTimeoutSec)s", value: $firstTokenTimeoutSec, in: 5...60)
+                Stepper("Idle: \(idleTimeoutSec)s", value: $idleTimeoutSec, in: 2...30)
+                Stepper("강제 종료: \(hardTimeoutSec)s", value: $hardTimeoutSec, in: 10...600)
+            } header: {
+                Text("타임아웃")
+            } footer: {
+                Text("번역 응답이 지연될 때 watchdog 이 작업을 중단하기까지의 시간입니다.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - MLX Server status row
 
 private struct MLXServerSection: View {
     @EnvironmentObject private var manager: MLXServerManager
     @AppStorage(SettingsKey.mlxServerEnabled) private var mlxServerEnabled = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(dotColor)
-                    .frame(width: 10, height: 10)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                statusDot
                 Text(statusLabel)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13, weight: .medium))
                 Spacer()
                 Toggle("", isOn: Binding(
                     get: { mlxServerEnabled },
@@ -98,11 +227,14 @@ private struct MLXServerSection: View {
                     }
                 ))
                 .labelsHidden()
+                .toggleStyle(.switch)
             }
+
             if case .error(let msg) = manager.status {
                 Text(msg)
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if msg.contains("모델") {
                     Button("설치 가이드 열기") {
                         if let url = URL(string: "https://github.com/newTurn2017/Lumo#mlx-setup") {
@@ -110,18 +242,29 @@ private struct MLXServerSection: View {
                         }
                     }
                     .buttonStyle(.link)
+                    .font(.system(size: 11))
                 }
             }
         }
     }
 
+    private var statusDot: some View {
+        Circle()
+            .fill(dotColor)
+            .frame(width: 10, height: 10)
+            .overlay(
+                Circle()
+                    .stroke(.white.opacity(0.15), lineWidth: 0.5)
+            )
+    }
+
     private var statusLabel: String {
         switch manager.status {
-        case .stopped: return "Stopped"
-        case .installing: return "Installing…"
-        case .starting: return "Starting…"
-        case .running: return "Running"
-        case .error: return "Error"
+        case .stopped: return "정지됨"
+        case .installing: return "설치 중…"
+        case .starting: return "시작 중…"
+        case .running: return "실행 중"
+        case .error: return "오류"
         }
     }
 
