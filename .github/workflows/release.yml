@@ -109,10 +109,14 @@ jobs:
           tar -xf /tmp/sparkle.tar.xz -C /tmp/sparkle_bin
 
           echo "$SPARKLE_PRIVATE_KEY" > /tmp/sparkle.key
-          SIGNATURE=$(/tmp/sparkle_bin/bin/sign_update \
+          FULL_OUTPUT=$(/tmp/sparkle_bin/bin/sign_update \
             --ed-key-file /tmp/sparkle.key \
             "$DMG_PATH")
           rm /tmp/sparkle.key
+
+          # sign_update outputs: sparkle:edSignature="BASE64" length="SIZE"
+          # Extract just the base64 signature value
+          SIGNATURE=$(echo "$FULL_OUTPUT" | sed 's/.*sparkle:edSignature="\([^"]*\)".*/\1/')
 
           DMG_SIZE=$(stat -f%z "$DMG_PATH")
           echo "SPARKLE_SIGNATURE=$SIGNATURE" >> "$GITHUB_ENV"
