@@ -6,3 +6,15 @@ Lumo.xcodeproj/
 xcuserdata/
 .swiftpm/
 Package.resolved
+
+# Design docs & brainstorm (local only)
+docs/
+.superpowers/
+
+# Icon generation sources
+lumo-icon-source.png
+lumo-menubar-source.png
+lumo-menubar-nobg.png
+
+# CI/CD
+*.p12
