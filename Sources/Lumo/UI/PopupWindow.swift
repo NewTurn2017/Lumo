@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Borderless panel that can still become key — required so the popup gains focus
-/// and we can observe `didResignKey` to dismiss on outside clicks.
+/// Borderless panel that can still become key — required so the popup gains
+/// focus and can receive Escape via a local `NSEvent` monitor.
 private final class FocusablePanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -13,7 +13,14 @@ final class PopupWindow: PopupPresenting {
     private var window: NSWindow?
     private let model = PopupModel()
     private var fadeTask: Task<Void, Never>?
-    private var resignObserver: NSObjectProtocol?
+    private var fadeTimer: FadeTimer?
+
+    private struct FadeTimer {
+        var totalDuration: TimeInterval
+        var startedAt: Date
+        var elapsedBeforePause: TimeInterval = 0
+        var isPaused: Bool = false
+    }
 
     init() {
         model.onClose = { [weak self] in self?.close() }
@@ -29,21 +36,24 @@ final class PopupWindow: PopupPresenting {
         set { model.onRestore = newValue }
     }
 
-    /// Fired on every close path (X button, click outside, fade). Safe to call
+    /// Fired on every close path (X button, fade). Safe to call
     /// on a completed translation — `Task.cancel()` on a finished task is a no-op.
     var onCancel: (() -> Void)?
 
     func showLoading() {
         fadeTask?.cancel()
+        fadeTimer = nil
         model.phase = .loading
         model.text = ""
         model.errorMessage = ""
+        let rawPt = UserDefaults.standard.object(forKey: SettingsKey.popupFontSize) as? Int ?? 18
+        let clampedPt = min(max(rawPt, 12), 28)
+        model.fontSize = CGFloat(clampedPt)
         ensureWindow()
         applyPopupSize()
         centerOnActiveScreen()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        observeResignKey()
     }
 
     /// Re-reads the user-selected popup size and resizes the panel before
@@ -66,26 +76,53 @@ final class PopupWindow: PopupPresenting {
     func showDone(finalText: String) {
         model.phase = .done
         model.text = finalText
-        scheduleFade()
+        let secs = UserDefaults.standard.object(forKey: SettingsKey.popupDismissAfterSec) as? Int ?? 15
+        if secs >= 0 {
+            startFade(duration: TimeInterval(secs))
+        }
     }
 
     func showError(_ message: String) {
         model.phase = .error
         model.errorMessage = message
-        scheduleFade()
+        startFade(duration: 5)
     }
 
     func close() {
         fadeTask?.cancel()
-        removeResignObserver()
+        fadeTimer = nil
         onCancel?()
         window?.orderOut(nil)
     }
 
-    private func scheduleFade() {
+    private func startFade(duration: TimeInterval) {
         fadeTask?.cancel()
+        fadeTimer = FadeTimer(totalDuration: duration, startedAt: Date())
+        armFadeTask(remaining: duration)
+        if model.isHovered { pauseFade() }
+    }
+
+    private func pauseFade() {
+        guard var t = fadeTimer, !t.isPaused else { return }
+        fadeTask?.cancel()
+        t.elapsedBeforePause += Date().timeIntervalSince(t.startedAt)
+        t.isPaused = true
+        fadeTimer = t
+    }
+
+    private func resumeFade() {
+        guard var t = fadeTimer, t.isPaused else { return }
+        let remaining = max(0, t.totalDuration - t.elapsedBeforePause)
+        guard remaining > 0 else { close(); return }
+        t.startedAt = Date()
+        t.isPaused = false
+        fadeTimer = t
+        armFadeTask(remaining: remaining)
+    }
+
+    private func armFadeTask(remaining: TimeInterval) {
         fadeTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(5))
+            try? await Task.sleep(for: .seconds(remaining))
             guard !Task.isCancelled else { return }
             await MainActor.run { self?.close() }
         }
@@ -122,23 +159,5 @@ final class PopupWindow: PopupPresenting {
             y: frame.midY - size.height / 2
         )
         w.setFrameOrigin(origin)
-    }
-
-    private func observeResignKey() {
-        guard resignObserver == nil, let window else { return }
-        resignObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResignKeyNotification,
-            object: window,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.close() }
-        }
-    }
-
-    private func removeResignObserver() {
-        if let observer = resignObserver {
-            NotificationCenter.default.removeObserver(observer)
-            resignObserver = nil
-        }
     }
 }
