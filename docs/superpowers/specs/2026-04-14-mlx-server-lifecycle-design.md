@@ -11,6 +11,10 @@ Lumo currently assumes the user has an external MLX or Ollama server already run
 
 **Scope:** MLX backend only. Ollama remains unchanged (user-managed).
 
+**Default model:** `mlx-community/gemma-4-e4b-it-4bit` — official Google Gemma-4 E4B, 4-bit MLX build (~3GB). Selected after benchmarking against SuperGemma4-26B-4bit: comparable quality for translation workloads with ~5× smaller memory footprint and slightly faster throughput (75 tok/s vs 65 tok/s on Apple Silicon).
+
+**Thinking MUST be disabled.** Gemma-4's chat template defaults to `enable_thinking: true`, which generates long reasoning blocks before content and makes translation 5-10× slower (first-content latency jumps from ~200ms to ~3500ms). MLXServerManager MUST start `mlx_lm.server` with `--chat-template-args '{"enable_thinking": false}'`. This is non-negotiable — without it, the app is unusable for real-time translation.
+
 ---
 
 ## Architecture
@@ -93,6 +97,9 @@ enable() invoked
                  --host 127.0.0.1
                  --port 8080
                  --model <detected path>
+                 --chat-template-args '{"enable_thinking": false}'   ← REQUIRED
+                 --prompt-cache-size 32768
+                 --max-tokens 2048
         poll GET /v1/models every 2s, timeout 60s
         success → status = .running
         timeout → status = .error("서버 시작 시간 초과")
