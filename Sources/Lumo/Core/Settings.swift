@@ -15,6 +15,7 @@ enum SettingsKey {
     static let firstTokenTimeoutSec         = "lumo.firstTokenTimeoutSec"
     static let idleTimeoutSec               = "lumo.idleTimeoutSec"
     static let hardTimeoutSec               = "lumo.hardTimeoutSec"
+    static let mlxServerEnabled             = "lumo.mlxServerEnabled"
     static let history                      = "lumo.history"
 }
 
@@ -32,6 +33,7 @@ struct SettingsSnapshot: Equatable {
     var firstTokenTimeoutSec: Int
     var idleTimeoutSec: Int
     var hardTimeoutSec: Int
+    var mlxServerEnabled: Bool
 
     static let defaults = SettingsSnapshot(
         backendType: "mlx",
@@ -46,7 +48,8 @@ struct SettingsSnapshot: Equatable {
         launchAtLogin: false,
         firstTokenTimeoutSec: 20,
         idleTimeoutSec: 8,
-        hardTimeoutSec: 120
+        hardTimeoutSec: 120,
+        mlxServerEnabled: true
     )
 
     static func load(from defaults: UserDefaults = .standard) -> SettingsSnapshot {
@@ -81,6 +84,9 @@ struct SettingsSnapshot: Equatable {
         }
         if defaults.object(forKey: SettingsKey.hardTimeoutSec) != nil {
             s.hardTimeoutSec = defaults.integer(forKey: SettingsKey.hardTimeoutSec)
+        }
+        if defaults.object(forKey: SettingsKey.mlxServerEnabled) != nil {
+            s.mlxServerEnabled = defaults.bool(forKey: SettingsKey.mlxServerEnabled)
         }
         return s
     }
