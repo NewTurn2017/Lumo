@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Borderless panel that can still become key — required so the popup gains
@@ -14,6 +15,8 @@ final class PopupWindow: PopupPresenting {
     private let model = PopupModel()
     private var fadeTask: Task<Void, Never>?
     private var fadeTimer: FadeTimer?
+    private var escapeMonitor: Any?
+    private var hoverCancellable: AnyCancellable?
 
     private struct FadeTimer {
         var totalDuration: TimeInterval
@@ -54,6 +57,13 @@ final class PopupWindow: PopupPresenting {
         centerOnActiveScreen()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        installEscapeMonitor()
+        hoverCancellable = model.$isHovered
+            .removeDuplicates()
+            .sink { [weak self] hovered in
+                guard let self else { return }
+                if hovered { self.pauseFade() } else { self.resumeFade() }
+            }
     }
 
     /// Re-reads the user-selected popup size and resizes the panel before
@@ -91,6 +101,8 @@ final class PopupWindow: PopupPresenting {
     func close() {
         fadeTask?.cancel()
         fadeTimer = nil
+        removeEscapeMonitor()
+        hoverCancellable = nil
         onCancel?()
         window?.orderOut(nil)
     }
@@ -125,6 +137,24 @@ final class PopupWindow: PopupPresenting {
             try? await Task.sleep(for: .seconds(remaining))
             guard !Task.isCancelled else { return }
             await MainActor.run { self?.close() }
+        }
+    }
+
+    private func installEscapeMonitor() {
+        guard escapeMonitor == nil else { return }
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // 53 == kVK_Escape
+            guard event.keyCode == 53,
+                  self?.window?.isKeyWindow == true else { return event }
+            Task { @MainActor in self?.close() }
+            return nil
+        }
+    }
+
+    private func removeEscapeMonitor() {
+        if let m = escapeMonitor {
+            NSEvent.removeMonitor(m)
+            escapeMonitor = nil
         }
     }
 
