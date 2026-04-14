@@ -7,15 +7,15 @@
     <description>Lumo 업데이트</description>
     <language>ko</language>
     <item>
-      <title>Lumo 1.1.0</title>
-      <pubDate>Tue, 14 Apr 2026 14:56:57 +0000</pubDate>
-      <sparkle:version>3</sparkle:version>
-      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <title>Lumo 1.2.0</title>
+      <pubDate>Tue, 14 Apr 2026 16:36:02 +0000</pubDate>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
       <enclosure
-        url="https://github.com/NewTurn2017/Lumo/releases/download/v1.1.0/Lumo-1.1.0.dmg"
-        length="2892101"
+        url="https://github.com/NewTurn2017/Lumo/releases/download/v1.2.0/Lumo-1.2.0.dmg"
+        length="2895478"
         type="application/octet-stream"
-        sparkle:edSignature="KywPl9lL2nDRsHW0z9yxX1UuckxyXlyLlCRxCA0z4swxtKPk/60weY39aNTslLu9bGU+a0viTP1MQoU7Psa7Cg=="/>
+        sparkle:edSignature="x7ARaHirsLKjTnIj2ldMAK61fKb34Xvo8cn52qpuNmA4WJFl+Rc4mmrvvrRvYcj4OUYq+U/D/TRkgpjUtFyFCw=="/>
     </item>
   </channel>
 </rss>
