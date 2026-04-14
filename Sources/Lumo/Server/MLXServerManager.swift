@@ -1,5 +1,8 @@
 import Foundation
 import Combine
+import os
+
+private let log = Logger(subsystem: "app.lumo.Lumo", category: "mlx-server")
 
 // MARK: - Collaborator protocols (enable injection in tests)
 
@@ -51,35 +54,46 @@ final class MLXServerManager: ObservableObject {
     }
 
     func enable() async {
+        log.info("enable() entered, status=\(String(describing: self.status), privacy: .public)")
         // Re-entrancy guard: reject if already in-flight or already running.
         // Only .stopped or .error can legitimately re-enter enable().
         switch status {
         case .stopped, .error:
             break
         case .installing, .starting, .running:
+            log.info("enable() rejected by re-entrancy guard")
             return
         }
         status = .installing
+        log.info("calling installer.installIfNeeded")
         do {
             try await installer.installIfNeeded()
         } catch {
+            log.error("installer threw: \(error.localizedDescription, privacy: .public)")
             status = .error(error.localizedDescription)
             return
         }
+        log.info("installer ok, calling detector.hasModel")
         guard detector.hasModel(modelID: modelID) else {
+            log.error("detector says model missing")
             status = .error("모델 없음 — GitHub 설치 가이드를 확인하세요")
             return
         }
+        log.info("detector ok, calling runner.start")
         status = .starting
         do {
             try runner.start(modelID: modelID)
         } catch {
+            log.error("runner.start threw: \(error.localizedDescription, privacy: .public)")
             status = .error(error.localizedDescription)
             return
         }
+        log.info("runner.start ok, waiting for ready")
         if await runner.waitForReady() {
+            log.info("ready → .running")
             status = .running
         } else {
+            log.error("waitForReady timed out")
             runner.stop()
             status = .error("서버 시작 시간 초과")
         }
@@ -240,6 +254,7 @@ final class SubprocessMLXRunner: MLXRunning {
     }
 
     func start(modelID: String) throws {
+        log.info("SubprocessMLXRunner.start enter, modelID=\(modelID, privacy: .public)")
         stop()  // idempotent: kill any lingering handle from a prior cycle
         // Reap any orphan mlx_lm.server occupying the port from a previous
         // crash / kill -9 / Xcode rebuild. Without this the new spawn would
@@ -248,17 +263,21 @@ final class SubprocessMLXRunner: MLXRunning {
         // handle would point at a dead child, so disable() couldn't kill
         // the actual server.
         Self.reapOrphanOnPort(baseURL.port ?? 8080)
+        log.info("reap done, building LaunchOptions")
         let opts = MLXServerProcess.LaunchOptions(
             executable: MLXPaths.serverExecutable(home: home),
             modelID: modelID,
             logURL: Self.logURL()
         )
+        log.info("calling MLXServerProcess.start")
         let h = try MLXServerProcess.start(opts)
+        log.info("Process spawned pid=\(h.process.processIdentifier)")
         // Defensive: if mlx_lm.server died immediately (bad args, bind failure,
         // missing model), `process.isRunning` flips false within ~200ms. Detect
         // and surface as an error instead of stashing a dead handle.
         Thread.sleep(forTimeInterval: 0.25)
         guard h.process.isRunning else {
+            log.info("Process died within 250ms — see \(h.logURL.path, privacy: .public)")
             throw NSError(
                 domain: "SubprocessMLXRunner",
                 code: 100,
@@ -266,6 +285,7 @@ final class SubprocessMLXRunner: MLXRunning {
                     "mlx_lm.server 가 시작 직후 종료되었습니다. 로그를 확인하세요: \(h.logURL.path)"]
             )
         }
+        log.info("Process alive after 250ms, storing handle")
         handle = h
     }
 
@@ -283,6 +303,7 @@ final class SubprocessMLXRunner: MLXRunning {
         guard let text = String(data: data, encoding: .utf8) else { return }
         let pids = text.split(whereSeparator: { $0.isNewline }).compactMap { Int32($0) }
         guard !pids.isEmpty else { return }
+        log.info("reaping \(pids.count) orphan PID(s) on port \(port)")
         for pid in pids { kill(pid, SIGTERM) }
         // Wait up to ~1s for graceful exit before SIGKILL
         for _ in 0..<20 {
