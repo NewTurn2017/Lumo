@@ -18,6 +18,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(s.idleTimeoutSec, 8)
         XCTAssertEqual(s.hardTimeoutSec, 120)
         XCTAssertTrue(s.mlxServerEnabled)
+        XCTAssertEqual(s.popupSize, "medium")
     }
 
     func test_load_readsMlxServerEnabledOverride() {

@@ -1,5 +1,35 @@
 import SwiftUI
 
+/// User-selectable popup window dimensions. Stored as the raw string
+/// in `SettingsKey.popupSize` so it round-trips through @AppStorage.
+enum PopupSize: String, CaseIterable, Identifiable {
+    case small, medium, large, xlarge
+
+    var id: String { rawValue }
+
+    var dimensions: (width: CGFloat, height: CGFloat) {
+        switch self {
+        case .small:  return (460, 320)
+        case .medium: return (600, 440)
+        case .large:  return (760, 560)
+        case .xlarge: return (900, 660)
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .small:  return "작게"
+        case .medium: return "보통"
+        case .large:  return "크게"
+        case .xlarge: return "아주 크게"
+        }
+    }
+
+    static func resolve(_ raw: String?) -> PopupSize {
+        PopupSize(rawValue: raw ?? "") ?? .medium
+    }
+}
+
 @MainActor
 final class PopupModel: ObservableObject {
     enum Phase { case loading, streaming, done, error }
@@ -14,33 +44,43 @@ final class PopupModel: ObservableObject {
 
 struct PopupView: View {
     @ObservedObject var model: PopupModel
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 headerIcon
-                Text(headerText).font(.headline)
+                Text(headerText)
+                    .font(.system(size: 14, weight: .semibold))
                 Spacer()
                 Button(action: { model.onClose?() }) {
                     Image(systemName: "xmark.circle.fill")
-                }.buttonStyle(.borderless)
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
             }
+
             ScrollView {
                 Text(displayText)
+                    .font(.system(size: 15))
+                    .lineSpacing(3)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 240)
+            .frame(maxHeight: .infinity)
+
             if model.phase == .done {
                 HStack {
                     Button("복사") { model.onCopy?() }
                     if model.canRestore {
                         Button("원문 복원") { model.onRestore?() }
                     }
+                    Spacer()
                 }
             }
         }
-        .padding(12)
-        .frame(width: 380)
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
     }
 

@@ -39,10 +39,23 @@ final class PopupWindow: PopupPresenting {
         model.text = ""
         model.errorMessage = ""
         ensureWindow()
+        applyPopupSize()
         centerOnActiveScreen()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         observeResignKey()
+    }
+
+    /// Re-reads the user-selected popup size and resizes the panel before
+    /// it is centered. The internal SwiftUI view fills the window via
+    /// `.frame(maxWidth: .infinity, maxHeight: .infinity)`.
+    private func applyPopupSize() {
+        guard let w = window else { return }
+        let raw = UserDefaults.standard.string(forKey: SettingsKey.popupSize)
+        let dims = PopupSize.resolve(raw).dimensions
+        var frame = w.frame
+        frame.size = NSSize(width: dims.width, height: dims.height)
+        w.setFrame(frame, display: false)
     }
 
     func append(_ chunk: String) {
@@ -80,8 +93,9 @@ final class PopupWindow: PopupPresenting {
 
     private func ensureWindow() {
         if window != nil { return }
+        let initial = PopupSize.medium.dimensions
         let w = FocusablePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 260),
+            contentRect: NSRect(x: 0, y: 0, width: initial.width, height: initial.height),
             styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false

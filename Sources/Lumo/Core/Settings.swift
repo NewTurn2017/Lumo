@@ -16,6 +16,7 @@ enum SettingsKey {
     static let idleTimeoutSec               = "lumo.idleTimeoutSec"
     static let hardTimeoutSec               = "lumo.hardTimeoutSec"
     static let mlxServerEnabled             = "lumo.mlxServerEnabled"
+    static let popupSize                    = "lumo.popupSize"
     static let history                      = "lumo.history"
 }
 
@@ -34,6 +35,7 @@ struct SettingsSnapshot: Equatable {
     var idleTimeoutSec: Int
     var hardTimeoutSec: Int
     var mlxServerEnabled: Bool
+    var popupSize: String   // "small" | "medium" | "large" | "xlarge"
 
     static let defaults = SettingsSnapshot(
         backendType: "mlx",
@@ -49,7 +51,8 @@ struct SettingsSnapshot: Equatable {
         firstTokenTimeoutSec: 20,
         idleTimeoutSec: 8,
         hardTimeoutSec: 120,
-        mlxServerEnabled: true
+        mlxServerEnabled: true,
+        popupSize: "medium"
     )
 
     static func load(from defaults: UserDefaults = .standard) -> SettingsSnapshot {
@@ -88,6 +91,7 @@ struct SettingsSnapshot: Equatable {
         if defaults.object(forKey: SettingsKey.mlxServerEnabled) != nil {
             s.mlxServerEnabled = defaults.bool(forKey: SettingsKey.mlxServerEnabled)
         }
+        if let v = defaults.string(forKey: SettingsKey.popupSize) { s.popupSize = v }
         return s
     }
 }

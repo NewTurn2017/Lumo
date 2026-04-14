@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.firstTokenTimeoutSec)      private var firstTokenTimeoutSec = 20
     @AppStorage(SettingsKey.idleTimeoutSec)            private var idleTimeoutSec = 8
     @AppStorage(SettingsKey.hardTimeoutSec)            private var hardTimeoutSec = 120
+    @AppStorage(SettingsKey.popupSize)                 private var popupSize = "medium"
 
     var body: some View {
         TabView {
@@ -26,7 +27,8 @@ struct SettingsView: View {
                 model: $model,
                 keepAlive: $keepAlive,
                 maxImageLongEdge: $maxImageLongEdge,
-                temperature: $temperature
+                temperature: $temperature,
+                popupSize: $popupSize
             )
             .tabItem { Label("일반", systemImage: "gearshape") }
 
@@ -60,6 +62,7 @@ private struct GeneralTab: View {
     @Binding var keepAlive: String
     @Binding var maxImageLongEdge: Int
     @Binding var temperature: Double
+    @Binding var popupSize: String
 
     var body: some View {
         Form {
@@ -116,6 +119,12 @@ private struct GeneralTab: View {
                             .foregroundColor(.secondary)
                         Stepper("", value: $maxImageLongEdge, in: 480...1920, step: 160)
                             .labelsHidden()
+                    }
+                }
+                Picker("결과 팝업 크기", selection: $popupSize) {
+                    ForEach(PopupSize.allCases) { size in
+                        Text("\(size.label) (\(Int(size.dimensions.width))×\(Int(size.dimensions.height)))")
+                            .tag(size.rawValue)
                     }
                 }
             }
