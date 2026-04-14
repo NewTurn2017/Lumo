@@ -142,6 +142,10 @@ jobs:
           mkdir -p /tmp/appcast_output
           DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           DMG_URL="https://github.com/NewTurn2017/Lumo/releases/download/v${VERSION}/Lumo-${VERSION}.dmg"
+          # sparkle:version must be CFBundleVersion (build number), not the marketing version.
+          # Sparkle compares sparkle:version against the running app's CFBundleVersion to
+          # determine whether an update is available.
+          BUILD_NUMBER=$(grep 'CFBundleVersion:' project.yml | sed 's/.*CFBundleVersion: *"\([^"]*\)".*/\1/')
           cat > /tmp/appcast_output/appcast.xml << APPCAST
           <?xml version="1.0" encoding="utf-8"?>
           <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
@@ -154,7 +158,7 @@ jobs:
               <item>
                 <title>Lumo ${VERSION}</title>
                 <pubDate>${DATE}</pubDate>
-                <sparkle:version>${VERSION}</sparkle:version>
+                <sparkle:version>${BUILD_NUMBER}</sparkle:version>
                 <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
                 <enclosure
                   url="${DMG_URL}"
