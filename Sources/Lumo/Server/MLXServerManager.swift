@@ -13,7 +13,7 @@ protocol MLXDetecting {
 
 @MainActor
 protocol MLXRunning: Sendable {
-    func start(modelPath: URL) throws
+    func start(modelID: String) throws
     func waitForReady() async -> Bool
     func stop()
 }
@@ -65,13 +65,13 @@ final class MLXServerManager: ObservableObject {
             status = .error(error.localizedDescription)
             return
         }
-        guard let modelPath = detector.detect(modelID: modelID) else {
+        guard detector.detect(modelID: modelID) != nil else {
             status = .error("모델 없음 — GitHub 설치 가이드를 확인하세요")
             return
         }
         status = .starting
         do {
-            try runner.start(modelPath: modelPath)
+            try runner.start(modelID: modelID)
         } catch {
             status = .error(error.localizedDescription)
             return
@@ -238,11 +238,11 @@ final class SubprocessMLXRunner: MLXRunning {
         self.session = session
     }
 
-    func start(modelPath: URL) throws {
+    func start(modelID: String) throws {
         stop()  // idempotent: kill any lingering handle from a prior cycle
         let opts = MLXServerProcess.LaunchOptions(
             executable: MLXPaths.serverExecutable(home: home),
-            modelPath: modelPath,
+            modelID: modelID,
             logURL: Self.logURL()
         )
         handle = try MLXServerProcess.start(opts)

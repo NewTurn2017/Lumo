@@ -19,6 +19,7 @@ final class MLXServerManagerStateTests: XCTestCase {
         XCTAssertEqual(sut.status, .running)
         XCTAssertTrue(installer.didInstall)
         XCTAssertTrue(runner.didStart)
+        XCTAssertEqual(runner.startedWithModelID, "mlx-community/gemma-4-e4b-it-4bit")
     }
 
     func test_enable_modelMissing_reachesErrorWithGuide() async {
@@ -136,9 +137,11 @@ private final class FakeRunner: MLXRunning {
     let readiness: Bool
     var didStart = false
     var didStop = false
+    var startedWithModelID: String?
     init(readiness: Bool) { self.readiness = readiness }
-    func start(modelPath: URL) throws {
+    func start(modelID: String) throws {
         didStart = true
+        startedWithModelID = modelID
     }
     func waitForReady() async -> Bool { readiness }
     func stop() { didStop = true }

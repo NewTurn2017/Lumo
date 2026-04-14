@@ -60,7 +60,7 @@ extension MLXServerProcess {
 
     struct LaunchOptions {
         var executable: URL          // .../mlx-venv/bin/mlx_lm.server
-        var modelPath: URL           // absolute path to HF cache folder
+        var modelID: String          // HF model id, e.g. "mlx-community/gemma-4-e4b-it-4bit"
         var host: String = "127.0.0.1"
         var port: Int = 8080
         var maxTokens: Int = 2048
@@ -92,7 +92,7 @@ extension MLXServerProcess {
         let proc = Process()
         proc.executableURL = opts.executable
         proc.arguments = [
-            "--model", opts.modelPath.path,
+            "--model", opts.modelID,
             "--host", opts.host,
             "--port", String(opts.port),
             "--max-tokens", String(opts.maxTokens),
