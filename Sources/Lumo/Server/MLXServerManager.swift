@@ -8,14 +8,15 @@ protocol MLXInstalling: Sendable {
 }
 
 protocol MLXDetecting {
-    func detect(modelID: String) -> URL?
+    func hasModel(modelID: String) -> Bool
 }
 
 @MainActor
 protocol MLXRunning: Sendable {
     func start(modelID: String) throws
     func waitForReady() async -> Bool
-    func stop()
+    func stop()       // interactive — short grace (0.5s)
+    func shutdown()   // app termination — long grace (3s)
 }
 
 // MARK: - Manager
@@ -65,7 +66,7 @@ final class MLXServerManager: ObservableObject {
             status = .error(error.localizedDescription)
             return
         }
-        guard detector.detect(modelID: modelID) != nil else {
+        guard detector.hasModel(modelID: modelID) else {
             status = .error("모델 없음 — GitHub 설치 가이드를 확인하세요")
             return
         }
@@ -90,10 +91,10 @@ final class MLXServerManager: ObservableObject {
     }
 
     /// Synchronous force-stop for `applicationWillTerminate`.
-    /// Delegates to the runner; the real runner implementation in Task 7
-    /// is responsible for SIGTERM → grace → SIGKILL.
+    /// Uses the long-grace (3s) path — acceptable during app quit but
+    /// not during interactive disable, which calls `runner.stop()`.
     func shutdown() {
-        runner.stop()
+        runner.shutdown()
         status = .stopped
     }
 }
@@ -212,8 +213,8 @@ struct FileSystemMLXDetector: MLXDetecting {
     init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.home = home
     }
-    func detect(modelID: String) -> URL? {
-        MLXPaths.detectModel(modelID: modelID, home: home)
+    func hasModel(modelID: String) -> Bool {
+        MLXPaths.detectModel(modelID: modelID, home: home) != nil
     }
 }
 
@@ -254,8 +255,14 @@ final class SubprocessMLXRunner: MLXRunning {
 
     func stop() {
         guard let h = handle else { return }
-        MLXServerProcess.stop(h)
         handle = nil
+        MLXServerProcess.stop(h, graceSeconds: 0.5)  // fast, for UI toggle
+    }
+
+    func shutdown() {
+        guard let h = handle else { return }
+        handle = nil
+        MLXServerProcess.stop(h, graceSeconds: 3.0)  // patient, for app quit
     }
 
     private static func logURL() -> URL {

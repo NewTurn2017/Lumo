@@ -4,7 +4,6 @@ import KeyboardShortcuts
 
 struct SettingsView: View {
     @EnvironmentObject private var mlxServerManager: MLXServerManager
-    @AppStorage(SettingsKey.mlxServerEnabled)          private var mlxServerEnabled = true
     @AppStorage(SettingsKey.backendType)               private var backendType = "mlx"
     @AppStorage(SettingsKey.ollamaURL)                 private var ollamaURL = "http://localhost:8080"
     @AppStorage(SettingsKey.model)                     private var model = "mlx-community/gemma-4-e4b-it-4bit"

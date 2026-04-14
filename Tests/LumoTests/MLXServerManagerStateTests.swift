@@ -105,6 +105,24 @@ final class MLXServerManagerStateTests: XCTestCase {
         XCTAssertEqual(sut.status, .stopped)
         XCTAssertTrue(runner.didStop)
     }
+
+    func test_managerShutdown_callsRunnerShutdownNotStop() async {
+        let runner = FakeRunner(readiness: true)
+        let sut = MLXServerManager(
+            modelID: "mlx-community/gemma-4-e4b-it-4bit",
+            installer: FakeInstaller(outcome: .success),
+            detector: FakeDetector(modelPath: URL(fileURLWithPath: "/tmp/model")),
+            runner: runner
+        )
+        await sut.enable()
+        XCTAssertEqual(sut.status, .running)
+
+        sut.shutdown()
+
+        XCTAssertEqual(sut.status, .stopped)
+        XCTAssertTrue(runner.didShutdown, "manager.shutdown must call runner.shutdown for the long grace path")
+        XCTAssertFalse(runner.didStop, "manager.shutdown must NOT use the fast stop")
+    }
 }
 
 // MARK: - Fakes
@@ -127,9 +145,10 @@ private final class FakeInstaller: MLXInstalling, @unchecked Sendable {
 }
 
 private final class FakeDetector: MLXDetecting {
-    let result: URL?
-    init(modelPath: URL?) { self.result = modelPath }
-    func detect(modelID: String) -> URL? { result }
+    let cached: Bool
+    init(cached: Bool) { self.cached = cached }
+    init(modelPath: URL?) { self.cached = (modelPath != nil) }  // back-compat for existing tests
+    func hasModel(modelID: String) -> Bool { cached }
 }
 
 @MainActor
@@ -137,6 +156,7 @@ private final class FakeRunner: MLXRunning {
     let readiness: Bool
     var didStart = false
     var didStop = false
+    var didShutdown = false
     var startedWithModelID: String?
     init(readiness: Bool) { self.readiness = readiness }
     func start(modelID: String) throws {
@@ -145,4 +165,5 @@ private final class FakeRunner: MLXRunning {
     }
     func waitForReady() async -> Bool { readiness }
     func stop() { didStop = true }
+    func shutdown() { didShutdown = true }
 }
