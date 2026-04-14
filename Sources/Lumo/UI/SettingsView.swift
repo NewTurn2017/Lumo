@@ -1,7 +1,10 @@
+import AppKit
 import SwiftUI
 import KeyboardShortcuts
 
 struct SettingsView: View {
+    @EnvironmentObject private var mlxServerManager: MLXServerManager
+    @AppStorage(SettingsKey.mlxServerEnabled)          private var mlxServerEnabled = true
     @AppStorage(SettingsKey.backendType)               private var backendType = "mlx"
     @AppStorage(SettingsKey.ollamaURL)                 private var ollamaURL = "http://localhost:8080"
     @AppStorage(SettingsKey.model)                     private var model = "mlx-community/gemma-4-e4b-it-4bit"
@@ -32,6 +35,10 @@ struct SettingsView: View {
                     Text("Temperature: \(String(format: "%.2f", temperature))")
                 }
                 KeyboardShortcuts.Recorder("Capture hotkey", name: .captureAndTranslate)
+                if backendType == "mlx" {
+                    Divider()
+                    MLXServerSection()
+                }
             }
             .padding(20)
             .tabItem { Text("General") }
@@ -64,5 +71,67 @@ struct SettingsView: View {
             .tabItem { Text("Debug") }
         }
         .frame(width: 480, height: 360)
+    }
+}
+
+private struct MLXServerSection: View {
+    @EnvironmentObject private var manager: MLXServerManager
+    @AppStorage(SettingsKey.mlxServerEnabled) private var mlxServerEnabled = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(dotColor)
+                    .frame(width: 10, height: 10)
+                Text(statusLabel)
+                    .font(.system(size: 12))
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { mlxServerEnabled },
+                    set: { newValue in
+                        mlxServerEnabled = newValue
+                        if newValue {
+                            Task { await manager.enable() }
+                        } else {
+                            manager.disable()
+                        }
+                    }
+                ))
+                .labelsHidden()
+            }
+            if case .error(let msg) = manager.status {
+                Text(msg)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                if msg.contains("모델") {
+                    Button("설치 가이드 열기") {
+                        if let url = URL(string: "https://github.com/newTurn2017/Lumo#mlx-setup") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.link)
+                }
+            }
+        }
+    }
+
+    private var statusLabel: String {
+        switch manager.status {
+        case .stopped: return "Stopped"
+        case .installing: return "Installing…"
+        case .starting: return "Starting…"
+        case .running: return "Running"
+        case .error: return "Error"
+        }
+    }
+
+    private var dotColor: Color {
+        switch manager.status {
+        case .running: return .green
+        case .starting, .installing: return .yellow
+        case .stopped: return .gray
+        case .error: return .red
+        }
     }
 }

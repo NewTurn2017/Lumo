@@ -3,6 +3,8 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let mlxServerManager: MLXServerManager
+
     private var menu: MenuBarController!
     private var orchestrator: TranslationOrchestrator!
     private var hotkey: HotkeyManager!
@@ -12,10 +14,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var translator: (any Translator)!
     private var retryTask: Task<Void, Never>?
 
+    override init() {
+        // Manager is created eagerly so LumoApp.body can inject it into
+        // the Settings scene via .environmentObject. Lifecycle start/stop
+        // is driven from applicationDidFinishLaunching / applicationWillTerminate.
+        self.mlxServerManager = MLXServerManager.live(
+            modelID: SettingsSnapshot.load().model
+        )
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         Self.terminateOtherInstances()
         let settings = SettingsSnapshot.load()
+        if settings.backendType == "mlx" && settings.mlxServerEnabled {
+            Task { [mlxServerManager] in await mlxServerManager.enable() }
+        }
         menu = MenuBarController()
         popup = PopupWindow()
         clipboard = NSPasteboardClipboard()
@@ -121,6 +136,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard !Task.isCancelled else { return }
             runWarmup(baseURL: baseURL, settings: settings, backendType: settings.backendType)
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        mlxServerManager.shutdown()
     }
 }
 

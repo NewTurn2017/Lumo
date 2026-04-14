@@ -7,6 +7,7 @@ struct LumoApp: App {
     var body: some Scene {
         Settings {
             SettingsView()
+                .environmentObject(delegate.mlxServerManager)
         }
     }
 }
