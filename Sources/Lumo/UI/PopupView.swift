@@ -37,6 +37,8 @@ final class PopupModel: ObservableObject {
     @Published var text: String = ""
     @Published var errorMessage: String = ""
     @Published var canRestore: Bool = false
+    @Published var fontSize: CGFloat = 18
+    @Published var isHovered: Bool = false
     var onRestore: (() -> Void)?
     var onClose: (() -> Void)?
     var onCopy: (() -> Void)?
@@ -62,8 +64,8 @@ struct PopupView: View {
 
             ScrollView {
                 Text(displayText)
-                    .font(.system(size: 15))
-                    .lineSpacing(3)
+                    .font(.system(size: model.fontSize))
+                    .lineSpacing(model.fontSize * 0.2)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -82,6 +84,9 @@ struct PopupView: View {
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
+        .onHover { hovered in
+            model.isHovered = hovered
+        }
     }
 
     private var headerIcon: some View {
