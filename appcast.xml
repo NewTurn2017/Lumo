@@ -8,14 +8,14 @@
     <language>ko</language>
     <item>
       <title>Lumo 1.0.1</title>
-      <pubDate>Tue, 14 Apr 2026 08:34:19 +0000</pubDate>
+      <pubDate>Tue, 14 Apr 2026 08:52:30 +0000</pubDate>
       <sparkle:version>1.0.1</sparkle:version>
       <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
       <enclosure
         url="https://github.com/NewTurn2017/Lumo/releases/download/v1.0.1/Lumo-1.0.1.dmg"
-        length="2879969"
+        length="2880110"
         type="application/octet-stream"
-        sparkle:edSignature="CZbSSkjyprNJcOvFELUw+qBWrr5k3O1UyHt0aodh5eZgnJSn9W7CilezN4LiFlyyt0dRaf2MhEWLHRfjhzH6BA=="/>
+        sparkle:edSignature="+B7Q+VqXsvbO15Jn5NVGB2Q0L98W7Tm/v6kJgryXy6JkIxmzRYZs4161YFGosFtWDsgPkb84fB37IlG0Q6CZCg=="/>
     </item>
   </channel>
 </rss>
