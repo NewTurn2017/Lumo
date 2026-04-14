@@ -49,6 +49,14 @@ final class MLXServerManager: ObservableObject {
     }
 
     func enable() async {
+        // Re-entrancy guard: reject if already in-flight or already running.
+        // Only .stopped or .error can legitimately re-enter enable().
+        switch status {
+        case .stopped, .error:
+            break
+        case .installing, .starting, .running:
+            return
+        }
         status = .installing
         do {
             try installer.installIfNeeded()

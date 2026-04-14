@@ -64,6 +64,30 @@ final class MLXServerManagerStateTests: XCTestCase {
         }
     }
 
+    func test_enable_secondCallWhileRunning_isNoOp() async {
+        let installer = FakeInstaller(outcome: .success)
+        let detector = FakeDetector(modelPath: URL(fileURLWithPath: "/tmp/model"))
+        let runner = FakeRunner(readiness: true)
+        let sut = MLXServerManager(
+            modelID: "mlx-community/gemma-4-e4b-it-4bit",
+            installer: installer,
+            detector: detector,
+            runner: runner
+        )
+
+        await sut.enable()
+        XCTAssertEqual(sut.status, .running)
+        installer.didInstall = false
+        runner.didStart = false
+
+        // Second call: should be a no-op since we're already running.
+        await sut.enable()
+
+        XCTAssertEqual(sut.status, .running)
+        XCTAssertFalse(installer.didInstall, "installer must not re-run while manager is running")
+        XCTAssertFalse(runner.didStart, "runner must not re-start while manager is running")
+    }
+
     func test_disable_transitionsFromRunningToStopped() async {
         let runner = FakeRunner(readiness: true)
         let sut = MLXServerManager(
