@@ -34,6 +34,9 @@ final class MenuBarController {
         didSet { render() }
     }
 
+    /// AppDelegate가 Sparkle updater와 연결하기 위해 주입하는 콜백
+    var onCheckForUpdates: (() -> Void)?
+
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         render()
@@ -42,6 +45,12 @@ final class MenuBarController {
 
     private func setupMenu() {
         let menu = NSMenu()
+
+        let updateItem = NSMenuItem(title: "업데이트 확인...", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
+
+        menu.addItem(.separator())
 
         let settingsItem = NSMenuItem(title: "설정...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -53,6 +62,10 @@ final class MenuBarController {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+    }
+
+    @objc private func checkForUpdates() {
+        onCheckForUpdates?()
     }
 
     @objc private func openSettings() {

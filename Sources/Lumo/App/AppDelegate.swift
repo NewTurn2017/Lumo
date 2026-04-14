@@ -1,10 +1,12 @@
 import AppKit
+import Sparkle
 import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let mlxServerManager: MLXServerManager
 
+    private let updaterController: SPUStandardUpdaterController
     private var menu: MenuBarController!
     private var orchestrator: TranslationOrchestrator!
     private var hotkey: HotkeyManager!
@@ -21,6 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.mlxServerManager = MLXServerManager.live(
             modelID: SettingsSnapshot.load().model
         )
+        self.updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
         super.init()
     }
 
@@ -32,6 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { [mlxServerManager] in await mlxServerManager.enable() }
         }
         menu = MenuBarController()
+        menu.onCheckForUpdates = { [weak self] in
+            self?.updaterController.updater.checkForUpdates()
+        }
         popup = PopupWindow()
         clipboard = NSPasteboardClipboard()
 
