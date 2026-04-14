@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          brew install xcodegen create-dmg
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
+          echo -n "$APPLE_CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
+          security create-keychain -p "" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+      - name: Build archive
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -scheme Lumo \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/Lumo.xcarchive" \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            -allowProvisioningUpdates
+
+      - name: Export app
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Lumo.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist scripts/ExportOptions.plist
+
+      - name: Notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          ditto -c -k --keepParent \
+            "$RUNNER_TEMP/export/Lumo.app" \
+            "$RUNNER_TEMP/Lumo-notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/Lumo-notarize.zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+      - name: Staple
+        run: xcrun stapler staple "$RUNNER_TEMP/export/Lumo.app"
+
+      - name: Create DMG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          create-dmg \
+            --volname "Lumo" \
+            --volicon "Sources/Lumo/Assets.xcassets/AppIcon.appiconset/icon_512.png" \
+            --background "scripts/dmg-background.png" \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 128 \
+            --icon "Lumo.app" 165 185 \
+            --hide-extension "Lumo.app" \
+            --app-drop-link 495 185 \
+            "$RUNNER_TEMP/Lumo-${VERSION}.dmg" \
+            "$RUNNER_TEMP/export/"
+          echo "DMG_PATH=$RUNNER_TEMP/Lumo-${VERSION}.dmg" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Sign update for Sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          SPARKLE_VER="2.6.4"
+          curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VER}/Sparkle-${SPARKLE_VER}.tar.xz" \
+            -o /tmp/sparkle.tar.xz
+          mkdir -p /tmp/sparkle_bin
+          tar -xf /tmp/sparkle.tar.xz -C /tmp/sparkle_bin
+
+          echo "$SPARKLE_PRIVATE_KEY" > /tmp/sparkle.key
+          SIGNATURE=$(/tmp/sparkle_bin/bin/sign_update \
+            --ed-key-file /tmp/sparkle.key \
+            "$DMG_PATH")
+          rm /tmp/sparkle.key
+
+          DMG_SIZE=$(stat -f%z "$DMG_PATH")
+          echo "SPARKLE_SIGNATURE=$SIGNATURE" >> "$GITHUB_ENV"
+          echo "DMG_SIZE=$DMG_SIZE" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Lumo ${{ env.VERSION }}"
+          body: |
+            ## Lumo ${{ env.VERSION }}
+
+            ### 설치
+            `Lumo-${{ env.VERSION }}.dmg`를 다운로드하고 Lumo.app을 Applications 폴더로 드래그하세요.
+
+            **시스템 요구사항:** macOS 13.0+, Apple Silicon
+          files: ${{ env.DMG_PATH }}
+          draft: false
+          prerelease: false
+
+      - name: Generate appcast.xml
+        run: |
+          mkdir -p /tmp/appcast_output
+          DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
+          DMG_URL="https://github.com/NewTurn2017/Lumo/releases/download/v${VERSION}/Lumo-${VERSION}.dmg"
+          cat > /tmp/appcast_output/appcast.xml << APPCAST
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+               xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <channel>
+              <title>Lumo</title>
+              <link>https://newturn2017.github.io/Lumo/appcast.xml</link>
+              <description>Lumo 업데이트</description>
+              <language>ko</language>
+              <item>
+                <title>Lumo ${VERSION}</title>
+                <pubDate>${DATE}</pubDate>
+                <sparkle:version>${VERSION}</sparkle:version>
+                <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                <enclosure
+                  url="${DMG_URL}"
+                  length="${DMG_SIZE}"
+                  type="application/octet-stream"
+                  sparkle:edSignature="${SPARKLE_SIGNATURE}"/>
+              </item>
+            </channel>
+          </rss>
+          APPCAST
+
+      - name: Deploy appcast to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: /tmp/appcast_output
+          publish_branch: gh-pages
+          include_hidden: false
+          keep_files: false
+          force_orphan: false
