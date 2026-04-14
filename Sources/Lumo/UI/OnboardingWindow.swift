@@ -43,8 +43,9 @@ struct OnboardingView: View {
 
             HStack {
                 if screenPendingRestart {
-                    Button("재시작") { restartApp() }
-                        .buttonStyle(.borderedProminent)
+                    Text("권한이 허용되었습니다. 잠시 후 재시작됩니다…")
+                        .font(.system(size: 11))
+                        .foregroundColor(.orange)
                 }
                 Spacer()
                 Button("완료") { NSApp.keyWindow?.close() }
@@ -54,14 +55,18 @@ struct OnboardingView: View {
         .padding(24)
         .frame(width: 480)
         .onAppear { refresh() }
-        // 사용자가 시스템 설정에서 권한 부여 후 앱으로 돌아올 때 자동 새로고침
+        // 사용자가 시스템 설정에서 권한 부여 후 앱으로 돌아올 때 자동 새로고침 + 자동 재시작
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             let wasGranted = screenGranted
             refresh()
-            // Screen Recording은 이미 허용됐지만 앱 재시작 전까지는 false를 반환할 수 있음
-            if !wasGranted && !screenGranted {
-                // CGPreflightScreenCaptureAccess가 false여도 실제로 허용됐을 수 있음 — pendingRestart 상태로 전환
-                screenPendingRestart = CGRequestScreenCaptureAccess()
+            // Screen Recording은 이미 허용됐지만 앱 재시작 전까지는 false를 반환할 수 있음.
+            // CGRequestScreenCaptureAccess가 true면 사용자가 방금 권한을 켰다는 뜻.
+            if !wasGranted && !screenGranted && CGRequestScreenCaptureAccess() {
+                screenPendingRestart = true
+                // 사용자가 "재시작됩니다…" 메시지를 볼 시간을 준 뒤 자동 relaunch.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    restartApp()
+                }
             }
         }
     }
@@ -99,8 +104,8 @@ struct OnboardingView: View {
     private func restartApp() {
         let url = Bundle.main.bundleURL
         let task = Process()
-        task.launchPath = "/usr/bin/open"
-        task.arguments = [url.path]
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = ["-n", url.path]
         try? task.run()
         NSApp.terminate(nil)
     }
