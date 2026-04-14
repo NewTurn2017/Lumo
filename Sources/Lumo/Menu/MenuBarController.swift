@@ -56,8 +56,15 @@ final class MenuBarController {
     }
 
     @objc private func openSettings() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        // Accessory 앱은 클릭 시점에 active 가 아니라서 responder chain 이 비어
+        // sendAction 이 조용히 실패한다. 먼저 .regular 로 승격 + activate 한 뒤
+        // 다음 runloop 에서 SwiftUI Settings 씬의 showSettingsWindow: 를 전송해야
+        // 응답이 온다.
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
     }
 
     func send(_ event: MenuBarEvent) {
