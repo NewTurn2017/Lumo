@@ -17,6 +17,8 @@ enum SettingsKey {
     static let hardTimeoutSec               = "lumo.hardTimeoutSec"
     static let mlxServerEnabled             = "lumo.mlxServerEnabled"
     static let popupSize                    = "lumo.popupSize"
+    static let popupDismissAfterSec         = "lumo.popupDismissAfterSec"
+    static let popupFontSize                = "lumo.popupFontSize"
     static let history                      = "lumo.history"
 }
 
@@ -36,6 +38,8 @@ struct SettingsSnapshot: Equatable {
     var hardTimeoutSec: Int
     var mlxServerEnabled: Bool
     var popupSize: String   // "small" | "medium" | "large" | "xlarge"
+    var popupDismissAfterSec: Int   // -1 = manual only, positive = seconds
+    var popupFontSize: Int          // points (clamped to 12...28 at runtime)
 
     static let defaults = SettingsSnapshot(
         backendType: "mlx",
@@ -52,7 +56,9 @@ struct SettingsSnapshot: Equatable {
         idleTimeoutSec: 8,
         hardTimeoutSec: 120,
         mlxServerEnabled: true,
-        popupSize: "medium"
+        popupSize: "medium",
+        popupDismissAfterSec: 15,
+        popupFontSize: 18
     )
 
     static func load(from defaults: UserDefaults = .standard) -> SettingsSnapshot {
@@ -92,6 +98,12 @@ struct SettingsSnapshot: Equatable {
             s.mlxServerEnabled = defaults.bool(forKey: SettingsKey.mlxServerEnabled)
         }
         if let v = defaults.string(forKey: SettingsKey.popupSize) { s.popupSize = v }
+        if defaults.object(forKey: SettingsKey.popupDismissAfterSec) != nil {
+            s.popupDismissAfterSec = defaults.integer(forKey: SettingsKey.popupDismissAfterSec)
+        }
+        if defaults.object(forKey: SettingsKey.popupFontSize) != nil {
+            s.popupFontSize = defaults.integer(forKey: SettingsKey.popupFontSize)
+        }
         return s
     }
 }

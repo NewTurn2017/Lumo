@@ -28,4 +28,30 @@ final class SettingsTests: XCTestCase {
         let s = SettingsSnapshot.load(from: suite)
         XCTAssertFalse(s.mlxServerEnabled)
     }
+
+    func test_defaults_includeNewPopupFields() {
+        let d = SettingsSnapshot.defaults
+        XCTAssertEqual(d.popupDismissAfterSec, 15)
+        XCTAssertEqual(d.popupFontSize, 18)
+    }
+
+    func test_load_roundTripsPopupDismissAndFontSize() {
+        let suite = UserDefaults(suiteName: "SettingsTests.popupRoundTrip")!
+        suite.removePersistentDomain(forName: "SettingsTests.popupRoundTrip")
+        suite.set(30, forKey: SettingsKey.popupDismissAfterSec)
+        suite.set(22, forKey: SettingsKey.popupFontSize)
+
+        let s = SettingsSnapshot.load(from: suite)
+        XCTAssertEqual(s.popupDismissAfterSec, 30)
+        XCTAssertEqual(s.popupFontSize, 22)
+    }
+
+    func test_load_popupDismissManualSentinel() {
+        let suite = UserDefaults(suiteName: "SettingsTests.popupManualSentinel")!
+        suite.removePersistentDomain(forName: "SettingsTests.popupManualSentinel")
+        suite.set(-1, forKey: SettingsKey.popupDismissAfterSec)
+
+        let s = SettingsSnapshot.load(from: suite)
+        XCTAssertEqual(s.popupDismissAfterSec, -1)
+    }
 }
