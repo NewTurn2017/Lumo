@@ -18,6 +18,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.idleTimeoutSec)            private var idleTimeoutSec = 8
     @AppStorage(SettingsKey.hardTimeoutSec)            private var hardTimeoutSec = 120
     @AppStorage(SettingsKey.popupSize)                 private var popupSize = "medium"
+    @AppStorage(SettingsKey.popupDismissAfterSec)      private var popupDismissAfterSec = 15
+    @AppStorage(SettingsKey.popupFontSize)             private var popupFontSize = 18
 
     var body: some View {
         TabView {
@@ -28,7 +30,9 @@ struct SettingsView: View {
                 keepAlive: $keepAlive,
                 maxImageLongEdge: $maxImageLongEdge,
                 temperature: $temperature,
-                popupSize: $popupSize
+                popupSize: $popupSize,
+                popupDismissAfterSec: $popupDismissAfterSec,
+                popupFontSize: $popupFontSize
             )
             .tabItem { Label("일반", systemImage: "gearshape") }
 
@@ -63,6 +67,8 @@ private struct GeneralTab: View {
     @Binding var maxImageLongEdge: Int
     @Binding var temperature: Double
     @Binding var popupSize: String
+    @Binding var popupDismissAfterSec: Int
+    @Binding var popupFontSize: Int
 
     var body: some View {
         Form {
@@ -126,6 +132,40 @@ private struct GeneralTab: View {
                         Text("\(size.label) (\(Int(size.dimensions.width))×\(Int(size.dimensions.height)))")
                             .tag(size.rawValue)
                     }
+                }
+
+                Picker("결과 팝업 표시 시간", selection: $popupDismissAfterSec) {
+                    Text("5초").tag(5)
+                    Text("15초").tag(15)
+                    Text("30초").tag(30)
+                    Text("1분").tag(60)
+                    Text("수동으로 닫기만").tag(-1)
+                }
+
+                LabeledContent("본문 글씨 크기") {
+                    HStack(spacing: 8) {
+                        Slider(
+                            value: Binding(
+                                get: { Double(popupFontSize) },
+                                set: { popupFontSize = Int($0) }
+                            ),
+                            in: 12...28,
+                            step: 1
+                        )
+                        .frame(maxWidth: 200)
+                        Text("\(popupFontSize) pt")
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                }
+
+                GroupBox("미리보기") {
+                    Text("안녕하세요. 이 문장은 번역 결과 팝업의 글씨 크기를 미리 보여줍니다. 슬라이더를 움직이면 여기 텍스트가 즉시 바뀝니다.")
+                        .font(.system(size: CGFloat(popupFontSize)))
+                        .lineSpacing(CGFloat(popupFontSize) * 0.2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
                 }
             }
 
