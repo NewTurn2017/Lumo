@@ -108,12 +108,12 @@ final class MLXServerManagerStateTests: XCTestCase {
 
 // MARK: - Fakes
 
-private final class FakeInstaller: MLXInstalling {
+private final class FakeInstaller: MLXInstalling, @unchecked Sendable {
     enum Outcome { case success; case failure(String) }
     let outcome: Outcome
     var didInstall = false
     init(outcome: Outcome) { self.outcome = outcome }
-    func installIfNeeded() throws {
+    func installIfNeeded() async throws {
         didInstall = true
         if case .failure(let msg) = outcome {
             throw NSError(
@@ -131,7 +131,7 @@ private final class FakeDetector: MLXDetecting {
     func detect(modelID: String) -> URL? { result }
 }
 
-private final class FakeRunner: MLXRunning {
+private final class FakeRunner: MLXRunning, @unchecked Sendable {
     let readiness: Bool
     var didStart = false
     var didStop = false

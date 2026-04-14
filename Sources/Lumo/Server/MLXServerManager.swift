@@ -3,15 +3,15 @@ import Combine
 
 // MARK: - Collaborator protocols (enable injection in tests)
 
-protocol MLXInstalling {
-    func installIfNeeded() throws
+protocol MLXInstalling: Sendable {
+    func installIfNeeded() async throws
 }
 
 protocol MLXDetecting {
     func detect(modelID: String) -> URL?
 }
 
-protocol MLXRunning {
+protocol MLXRunning: Sendable {
     func start(modelPath: URL) throws
     func waitForReady() async -> Bool
     func stop()
@@ -59,7 +59,7 @@ final class MLXServerManager: ObservableObject {
         }
         status = .installing
         do {
-            try installer.installIfNeeded()
+            try await installer.installIfNeeded()
         } catch {
             status = .error(error.localizedDescription)
             return
@@ -94,5 +94,163 @@ final class MLXServerManager: ObservableObject {
     func shutdown() {
         runner.stop()
         status = .stopped
+    }
+}
+
+// MARK: - Real adapters
+
+enum ShellRunner {
+    /// Runs a command to completion and returns (exitCode, stderr). stdout is
+    /// captured but discarded. Used by the installer for one-shot commands.
+    static func run(_ executable: URL, _ args: [String]) throws -> (Int32, String) {
+        let proc = Process()
+        proc.executableURL = executable
+        proc.arguments = args
+        let errPipe = Pipe()
+        let outPipe = Pipe()
+        proc.standardError = errPipe
+        proc.standardOutput = outPipe
+        try proc.run()
+        proc.waitUntilExit()
+        let err = String(
+            data: errPipe.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        ) ?? ""
+        return (proc.terminationStatus, err)
+    }
+}
+
+struct SystemMLXInstaller: MLXInstalling {
+    let home: URL
+    init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+        self.home = home
+    }
+
+    func installIfNeeded() async throws {
+        // pip install is slow — run off the MainActor to avoid freezing UI.
+        let home = self.home
+        try await Task.detached(priority: .utility) {
+            try Self.doInstallIfNeeded(home: home)
+        }.value
+    }
+
+    private static func doInstallIfNeeded(home: URL) throws {
+        let fm = FileManager.default
+        let venv = MLXPaths.venvRoot(home: home)
+
+        if fm.fileExists(atPath: MLXPaths.serverExecutable(home: home).path) {
+            return
+        }
+
+        try fm.createDirectory(
+            at: venv.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        guard let python3 = findPython3() else {
+            throw NSError(
+                domain: "MLXInstaller", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Python 3이 필요합니다"]
+            )
+        }
+        let (venvCode, venvErr) = try ShellRunner.run(python3, ["-m", "venv", venv.path])
+        guard venvCode == 0 else {
+            throw NSError(
+                domain: "MLXInstaller", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "venv 생성 실패: \(venvErr)"]
+            )
+        }
+
+        let pip = MLXPaths.pipExecutable(home: home)
+        let (pipCode, pipErr) = try ShellRunner.run(pip, ["install", "--quiet", "mlx-lm"])
+        guard pipCode == 0 else {
+            throw NSError(
+                domain: "MLXInstaller", code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "mlx-lm 설치 실패: \(pipErr)"]
+            )
+        }
+    }
+
+    private static func findPython3() -> URL? {
+        for p in [
+            "/opt/homebrew/bin/python3",
+            "/usr/local/bin/python3",
+            "/usr/bin/python3",
+        ] {
+            if FileManager.default.isExecutableFile(atPath: p) {
+                return URL(fileURLWithPath: p)
+            }
+        }
+        return nil
+    }
+}
+
+struct FileSystemMLXDetector: MLXDetecting {
+    let home: URL
+    init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+        self.home = home
+    }
+    func detect(modelID: String) -> URL? {
+        MLXPaths.detectModel(modelID: modelID, home: home)
+    }
+}
+
+/// Real runner. Marked `@unchecked Sendable` because all mutations to
+/// `handle` originate on the MainActor via `MLXServerManager`. If that
+/// invariant is ever broken, add a serial queue or make this an actor.
+final class SubprocessMLXRunner: MLXRunning, @unchecked Sendable {
+    let home: URL
+    let baseURL: URL
+    let session: URLSession
+    private var handle: MLXServerProcess.Handle?
+
+    init(
+        home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        baseURL: URL = URL(string: "http://127.0.0.1:8080")!,
+        session: URLSession = .shared
+    ) {
+        self.home = home
+        self.baseURL = baseURL
+        self.session = session
+    }
+
+    func start(modelPath: URL) throws {
+        stop()  // idempotent: kill any lingering handle from a prior cycle
+        let opts = MLXServerProcess.LaunchOptions(
+            executable: MLXPaths.serverExecutable(home: home),
+            modelPath: modelPath,
+            logURL: Self.logURL()
+        )
+        handle = try MLXServerProcess.start(opts)
+    }
+
+    func waitForReady() async -> Bool {
+        await MLXServerProcess.waitForReady(baseURL: baseURL, session: session)
+    }
+
+    func stop() {
+        guard let h = handle else { return }
+        MLXServerProcess.stop(h)
+        handle = nil
+    }
+
+    private static func logURL() -> URL {
+        let lib = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
+        return lib
+            .appendingPathComponent("Logs", isDirectory: true)
+            .appendingPathComponent("Lumo", isDirectory: true)
+            .appendingPathComponent("mlx-server.log")
+    }
+}
+
+extension MLXServerManager {
+    /// Factory wiring the real adapters for production use.
+    static func live(modelID: String) -> MLXServerManager {
+        MLXServerManager(
+            modelID: modelID,
+            installer: SystemMLXInstaller(),
+            detector: FileSystemMLXDetector(),
+            runner: SubprocessMLXRunner()
+        )
     }
 }
