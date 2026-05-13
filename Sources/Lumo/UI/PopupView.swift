@@ -47,45 +47,71 @@ final class PopupModel: ObservableObject {
 struct PopupView: View {
     @ObservedObject var model: PopupModel
 
+    private let cornerRadius: CGFloat = 14
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                headerIcon
-                Text(headerText)
-                    .font(.system(size: 14, weight: .semibold))
-                Spacer()
-                Button(action: { model.onClose?() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.borderless)
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+
+            Divider().opacity(0.4)
 
             ScrollView {
                 Text(displayText)
                     .font(.system(size: model.fontSize))
-                    .lineSpacing(model.fontSize * 0.2)
-                    .textSelection(.enabled)
+                    .lineSpacing(model.fontSize * 0.25)
+                    .foregroundStyle(model.phase == .error ? Color.secondary : Color.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
             }
             .frame(maxHeight: .infinity)
 
             if model.phase == .done {
-                HStack {
+                Divider().opacity(0.4)
+                HStack(spacing: 8) {
                     Button("복사") { model.onCopy?() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.regular)
                     if model.canRestore {
                         Button("원문 복원") { model.onRestore?() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
                     }
                     Spacer()
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.ultraThinMaterial)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
         .onHover { hovered in
             model.isHovered = hovered
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            headerIcon
+            Text(headerText)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(action: { model.onClose?() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
         }
     }
 

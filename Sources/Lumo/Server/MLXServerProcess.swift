@@ -64,7 +64,13 @@ extension MLXServerProcess {
         var host: String = "127.0.0.1"
         var port: Int = 18080
         var maxTokens: Int = 2048
-        var promptCacheSize: Int = 32768
+        // 0 disables the cross-request KV prompt cache. mlx_lm.server's
+        // prompt-cache reuses KV state across requests when prompts share a
+        // prefix — since our system prompt is identical every call, edge cases
+        // in cache trimming let fragments of prior user messages bleed into
+        // new outputs (the "previous-translation contamination" bug). Each
+        // translation is short and independent, so the cache offers little.
+        var promptCacheSize: Int = 0
         var logURL: URL              // .../Library/Logs/Lumo/mlx-server.log
     }
 
@@ -91,14 +97,17 @@ extension MLXServerProcess {
 
         let proc = Process()
         proc.executableURL = opts.executable
-        proc.arguments = [
+        var args = [
             "--model", opts.modelID,
             "--host", opts.host,
             "--port", String(opts.port),
             "--max-tokens", String(opts.maxTokens),
-            "--prompt-cache-size", String(opts.promptCacheSize),
             "--chat-template-args", #"{"enable_thinking": false}"#,
         ]
+        if opts.promptCacheSize > 0 {
+            args.append(contentsOf: ["--prompt-cache-size", String(opts.promptCacheSize)])
+        }
+        proc.arguments = args
         proc.standardOutput = logHandle
         proc.standardError = logHandle
 
